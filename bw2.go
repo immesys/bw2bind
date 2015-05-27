@@ -17,6 +17,7 @@ type BW2Client struct {
 	remotever string
 }
 
+func (cl *BW2Client) Publish()
 func Connect(to string) (*BW2Client, error) {
 	conn, err := net.Dial("tcp", to)
 	if err != nil {
@@ -32,20 +33,23 @@ func Connect(to string) (*BW2Client, error) {
 	go func() {
 		helo, err := objects.LoadFrameFromStream(rv.in)
 		if err != nil {
-			log.Error("Malformed HELO frame")
+			log.Error("Malformed HELO frame: ", err)
 			ok <- false
+			return
 		}
 		if helo.Cmd != objects.CmdHello {
 			log.Error("Frame not HELO")
 			ok <- false
+			return
 		}
 		rver, hok := helo.GetFirstHeader("version")
 		if !hok {
 			log.Error("Frame has no version")
 			ok <- false
+			return
 		}
 		rv.remotever = rver
-		log.Info("Connected to router version ", rver)
+		log.Info("Connected to BOSSWAVE router version ", rver)
 		ok <- true
 	}()
 	select {
