@@ -290,11 +290,18 @@ func (cl *BW2Client) Subscribe(p *SubscribeParams) (chan *SimpleMessage, error) 
 		req.AddHeader("expirydelta", p.ExpiryDelta.String())
 	}
 	req.AddHeader("uri", p.URI)
-	req.AddHeader("primary_access_chain", p.PrimaryAccessChain)
+	if len(p.PrimaryAccessChain) != 0 {
+		req.AddHeader("primary_access_chain", p.PrimaryAccessChain)
+	}
 	for _, ro := range p.RoutingObjects {
 		req.AddRoutingObject(ro)
 	}
-	req.AddHeader("elaborate_pac", p.ElaboratePAC)
+	if len(p.ElaboratePAC) != 0 {
+		req.AddHeader("elaborate_pac", p.ElaboratePAC)
+	}
+	if !p.LeavePacked {
+		req.AddHeader("unpack", "true")
+	}
 	req.AddHeader("doverify", strconv.FormatBool(p.DoVerify))
 	rsp := cl.transact(req)
 	//First response is the RESP frame
@@ -302,7 +309,7 @@ func (cl *BW2Client) Subscribe(p *SubscribeParams) (chan *SimpleMessage, error) 
 	if ok {
 		status, _ := fr.GetFirstHeader("status")
 		if status != "okay" {
-			msg, _ := fr.GetFirstHeader("msg")
+			msg, _ := fr.GetFirstHeader("reason")
 			return nil, errors.New(msg)
 		}
 	} else {

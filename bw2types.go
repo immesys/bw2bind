@@ -25,6 +25,7 @@ type SubscribeParams struct {
 	ExpiryDelta        *time.Duration
 	ElaboratePAC       string
 	DoVerify           bool
+	LeavePacked        bool
 }
 type ListParams struct {
 	MVK                []byte
