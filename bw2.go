@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"encoding/base64"
 	"errors"
+	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 	"strconv"
@@ -20,7 +22,7 @@ type BW2Client struct {
 	out       *bufio.Writer
 	in        *bufio.Reader
 	remotever string
-	seqnos    map[int]chan *objects.Frame
+	seqnos    map[int]chan *Frame
 	olock     sync.Mutex
 	curseqno  uint32
 }
@@ -37,19 +39,19 @@ func Connect(to string) (*BW2Client, error) {
 	rv := &BW2Client{c: conn,
 		out:    bufio.NewWriter(conn),
 		in:     bufio.NewReader(conn),
-		seqnos: make(map[int]chan *objects.Frame)}
+		seqnos: make(map[int]chan *Frame)}
 
 	//As a bit of a sanity check, we read the first frame, which is the
 	//server HELO message
 	ok := make(chan bool, 1)
 	go func() {
-		helo, err := objects.LoadFrameFromStream(rv.in)
+		helo, err := LoadFrameFromStream(rv.in)
 		if err != nil {
 			log.Error("Malformed HELO frame: ", err)
 			ok <- false
 			return
 		}
-		if helo.Cmd != objects.CmdHello {
+		if helo.Cmd != CmdHello {
 			log.Error("Frame not HELO")
 			ok <- false
 			return
@@ -70,7 +72,7 @@ func Connect(to string) (*BW2Client, error) {
 			//Reader:
 			go func() {
 				for {
-					frame, err := objects.LoadFrameFromStream(rv.in)
+					frame, err := LoadFrameFromStream(rv.in)
 					if err != nil {
 						log.Error("Invalid frame")
 						log.Flush()
@@ -97,10 +99,10 @@ func Connect(to string) (*BW2Client, error) {
 
 //Sends a request frame and returns a frame that contains all the responses.
 //Automatically closes the returned channel when there are no more responses.
-func (cl *BW2Client) transact(req *objects.Frame) chan *objects.Frame {
+func (cl *BW2Client) transact(req *Frame) chan *Frame {
 	seqno := req.SeqNo
-	inchan := make(chan *objects.Frame, 3)
-	outchan := make(chan *objects.Frame, 3)
+	inchan := make(chan *Frame, 3)
+	outchan := make(chan *Frame, 3)
 	cl.olock.Lock()
 	cl.seqnos[seqno] = inchan
 	req.WriteToStream(cl.out)
@@ -134,7 +136,7 @@ func (cl *BW2Client) closeSeq(seqno int) {
 
 func (cl *BW2Client) CreateEntity(p *CreateEntityParams) (string, []byte, error) {
 	seqno := cl.GetSeqNo()
-	req := objects.CreateFrame(objects.CmdMakeEntity, seqno)
+	req := CreateFrame(CmdMakeEntity, seqno)
 	if p.Expiry != nil {
 		req.AddHeader("expiry", p.Expiry.Format(time.RFC3339))
 	}
@@ -153,7 +155,7 @@ func (cl *BW2Client) CreateEntity(p *CreateEntityParams) (string, []byte, error)
 	fr, ok := <-rsp
 	cl.closeSeq(seqno)
 	if ok {
-		if fr.Cmd == objects.CmdResponse { //error
+		if fr.Cmd == CmdResponse { //error
 			msg, _ := fr.GetFirstHeader("reason")
 			return "", nil, errors.New(msg)
 		} else if len(fr.POs) != 1 {
@@ -162,14 +164,14 @@ func (cl *BW2Client) CreateEntity(p *CreateEntityParams) (string, []byte, error)
 		vk, _ := fr.GetFirstHeader("vk")
 		po := fr.POs[0].PO
 
-		return vk, po.GetContent(), nil
+		return vk, po, nil
 	}
 	return "", nil, errors.New("reply channel closed")
 }
 
 func (cl *BW2Client) CreateDOT(p *CreateDOTParams) (string, *objects.DOT, error) {
 	seqno := cl.GetSeqNo()
-	req := objects.CreateFrame(objects.CmdMakeDot, seqno)
+	req := CreateFrame(CmdMakeDot, seqno)
 	if p.Expiry != nil {
 		req.AddHeader("expiry", p.Expiry.Format(time.RFC3339))
 	}
@@ -197,7 +199,7 @@ func (cl *BW2Client) CreateDOT(p *CreateDOTParams) (string, *objects.DOT, error)
 	fr, ok := <-rsp
 	cl.closeSeq(seqno)
 	if ok {
-		if fr.Cmd == objects.CmdResponse { //error
+		if fr.Cmd == CmdResponse { //error
 			msg, _ := fr.GetFirstHeader("reason")
 			return "", nil, errors.New(msg)
 		} else if len(fr.ROs) != 1 {
@@ -213,7 +215,7 @@ func (cl *BW2Client) CreateDOT(p *CreateDOTParams) (string, *objects.DOT, error)
 
 func (cl *BW2Client) CreateDotChain(p *CreateDotChainParams) (string, *objects.DChain, error) {
 	seqno := cl.GetSeqNo()
-	req := objects.CreateFrame(objects.CmdMakeChain, seqno)
+	req := CreateFrame(CmdMakeChain, seqno)
 	req.AddHeader("ispermission", strconv.FormatBool(p.IsPermission))
 	req.AddHeader("unelaborate", strconv.FormatBool(p.UnElaborate))
 	for _, dot := range p.DOTs {
@@ -223,7 +225,7 @@ func (cl *BW2Client) CreateDotChain(p *CreateDotChainParams) (string, *objects.D
 	fr, ok := <-rsp
 	cl.closeSeq(seqno)
 	if ok {
-		if fr.Cmd == objects.CmdResponse { //error
+		if fr.Cmd == CmdResponse { //error
 			msg, _ := fr.GetFirstHeader("reason")
 			return "", nil, errors.New(msg)
 		} else if len(fr.ROs) != 1 {
@@ -239,11 +241,11 @@ func (cl *BW2Client) CreateDotChain(p *CreateDotChainParams) (string, *objects.D
 
 func (cl *BW2Client) Publish(p *PublishParams) error {
 	seqno := cl.GetSeqNo()
-	cmd := objects.CmdPublish
+	cmd := CmdPublish
 	if p.Persist {
-		cmd = objects.CmdPersist
+		cmd = CmdPersist
 	}
-	req := objects.CreateFrame(cmd, seqno)
+	req := CreateFrame(cmd, seqno)
 	if p.Expiry != nil {
 		req.AddHeader("expiry", p.Expiry.Format(time.RFC3339))
 	}
@@ -282,7 +284,7 @@ func (cl *BW2Client) Publish(p *PublishParams) error {
 
 func (cl *BW2Client) Subscribe(p *SubscribeParams) (chan *SimpleMessage, error) {
 	seqno := cl.GetSeqNo()
-	req := objects.CreateFrame(objects.CmdSubscribe, seqno)
+	req := CreateFrame(CmdSubscribe, seqno)
 	if p.Expiry != nil {
 		req.AddHeader("expiry", p.Expiry.Format(time.RFC3339))
 	}
@@ -305,7 +307,9 @@ func (cl *BW2Client) Subscribe(p *SubscribeParams) (chan *SimpleMessage, error) 
 	req.AddHeader("doverify", strconv.FormatBool(p.DoVerify))
 	rsp := cl.transact(req)
 	//First response is the RESP frame
+	fmt.Println("waiting on rsp channel")
 	fr, ok := <-rsp
+	fmt.Println("rsp channel returned")
 	if ok {
 		status, _ := fr.GetFirstHeader("status")
 		if status != "okay" {
@@ -322,8 +326,18 @@ func (cl *BW2Client) Subscribe(p *SubscribeParams) (chan *SimpleMessage, error) 
 			sm := SimpleMessage{}
 			sm.From, _ = f.GetFirstHeader("from")
 			sm.URI, _ = f.GetFirstHeader("uri")
-			sm.POs = f.GetAllPOs()
 			sm.ROs = f.GetAllROs()
+			poslice := make([]PayloadObject, f.NumPOs())
+			errslice := make([]error, 0)
+			for i := 0; i < f.NumPOs(); i++ {
+				var err error
+				poslice[i], err = f.GetPO(i)
+				if err != nil {
+					errslice = append(errslice, err)
+				}
+			}
+			sm.POs = poslice
+			sm.POErrors = errslice
 			rv <- &sm
 		}
 	}()
@@ -332,11 +346,8 @@ func (cl *BW2Client) Subscribe(p *SubscribeParams) (chan *SimpleMessage, error) 
 
 func (cl *BW2Client) SetEntity(keyfile []byte) error {
 	seqno := cl.GetSeqNo()
-	req := objects.CreateFrame(objects.CmdSetEntity, seqno)
-	po, err := objects.CreateOpaquePayloadObjectDF("1.0.1.2", keyfile)
-	if err != nil {
-		return err
-	}
+	req := CreateFrame(CmdSetEntity, seqno)
+	po := CreateBasePayloadObject(FromDotForm("1.0.1.2"), keyfile)
 	req.AddPayloadObject(po)
 	rsp := cl.transact(req)
 	fr, ok := <-rsp
@@ -350,6 +361,14 @@ func (cl *BW2Client) SetEntity(keyfile []byte) error {
 		return nil
 	}
 	return errors.New("receive channel closed")
+}
+
+func (cl *BW2Client) SetEntityFile(filename string) error {
+	contents, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return err
+	}
+	return cl.SetEntity(contents[1:])
 }
 
 func FmtKey(key []byte) string {
@@ -384,12 +403,4 @@ func UnFmtHash(hash string) ([]byte, error) {
 		return nil, errors.New("Invalid length")
 	}
 	return rv, err
-}
-
-func MkPOString(s string) objects.PayloadObject {
-	po, err := objects.CreateOpaquePayloadObjectDF("64.0.1.0", []byte(s))
-	if err != nil {
-		panic(err)
-	}
-	return po
 }
