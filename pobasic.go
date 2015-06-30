@@ -1,6 +1,14 @@
 package bw2bind
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+	"strings"
+
+	_ "github.com/ugorji/go/codec"
+	"gopkg.in/vmihailenco/msgpack.v2"
+	"gopkg.in/yaml.v2"
+)
 
 type POConstructor struct {
 	PONum       string
@@ -9,6 +17,8 @@ type POConstructor struct {
 }
 
 var PayloadObjectConstructors = []POConstructor{
+	{"67.0.0.0", 8, LoadYAMLPayloadObjectPO},
+	{"2.0.0.0", 8, LoadMsgPackPayloadObjectPO},
 	{"64.0.0.0", 4, LoadTextPayloadObjectPO},
 	{"0.0.0.0", 0, LoadBasePayloadObjectPO},
 }
@@ -30,6 +40,8 @@ type PayloadObject interface {
 	GetPODotNum() string
 	TextRepresentation() string
 	GetContents() []byte
+	IsTypeDF(df string) bool
+	IsType(ponum, mask int) bool
 }
 type PayloadObjectImpl struct {
 	ponum    int
@@ -64,6 +76,24 @@ func (po *PayloadObjectImpl) GetPODotNum() string {
 func (po *PayloadObjectImpl) TextRepresentation() string {
 	return fmt.Sprintf("PO %s len %d", PONumDotForm(po.ponum), len(po.contents))
 }
+func (po *PayloadObjectImpl) IsType(ponum, mask int) bool {
+	return (ponum >> uint(32-mask)) == (po.ponum >> uint(32-mask))
+}
+func (po *PayloadObjectImpl) IsTypeDF(df string) bool {
+	parts := strings.SplitN(df, "/", 2)
+	var mask int
+	var err error
+	if len(parts) != 2 {
+		mask = 32
+	} else {
+		mask, err = strconv.Atoi(parts[1])
+		if err != nil {
+			panic("malformed masked dot form")
+		}
+	}
+	ponum := FromDotForm(parts[0])
+	return po.IsType(ponum, mask)
+}
 
 //TextPayloadObject implements 64.0.0.0/4 : Human readable
 type TextPayloadObject interface {
@@ -90,6 +120,64 @@ func (po *TextPayloadObjectImpl) TextRepresentation() string {
 }
 func (po *TextPayloadObjectImpl) Value() string {
 	return string(po.contents)
+}
+
+type YAMLPayloadObject interface {
+	PayloadObject
+	ValueInto(v interface{}) error
+}
+type YAMLPayloadObjectImpl struct {
+	TextPayloadObjectImpl
+}
+
+func LoadYAMLPayloadObject(ponum int, contents []byte) (*YAMLPayloadObjectImpl, error) {
+	tpl, _ := LoadTextPayloadObject(ponum, contents)
+	rv := YAMLPayloadObjectImpl{*tpl}
+	return &rv, nil
+}
+func LoadYAMLPayloadObjectPO(ponum int, contents []byte) (PayloadObject, error) {
+	return LoadYAMLPayloadObject(ponum, contents)
+}
+func CreateYAMLPayloadObject(ponum int, value interface{}) (*YAMLPayloadObjectImpl, error) {
+	contents, err := yaml.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	tpl, _ := LoadTextPayloadObject(ponum, contents)
+	rv := YAMLPayloadObjectImpl{*tpl}
+	return &rv, nil
+}
+func (po *YAMLPayloadObjectImpl) ValueInto(v interface{}) error {
+	err := yaml.Unmarshal(po.contents, v)
+	return err
+}
+
+type MsgPackPayloadObject interface {
+	PayloadObject
+	ValueInto(v interface{}) error
+}
+type MsgPackPayloadObjectImpl struct {
+	PayloadObjectImpl
+}
+
+func LoadMsgPackPayloadObject(ponum int, contents []byte) (*MsgPackPayloadObjectImpl, error) {
+	bpl, _ := LoadBasePayloadObject(ponum, contents)
+	rv := MsgPackPayloadObjectImpl{*bpl}
+	return &rv, nil
+}
+func LoadMsgPackPayloadObjectPO(ponum int, contents []byte) (PayloadObject, error) {
+	return LoadMsgPackPayloadObject(ponum, contents)
+}
+func CreateMsgPackPayloadObject(ponum int, value interface{}) (*MsgPackPayloadObjectImpl, error) {
+	buf, err := msgpack.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	return LoadMsgPackPayloadObject(ponum, buf)
+}
+func (po *MsgPackPayloadObjectImpl) ValueInto(v interface{}) error {
+	err := msgpack.Unmarshal(po.contents, &v)
+	return err
 }
 
 //StringPayloadObject implements 64.0.1.0/32 : String

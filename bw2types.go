@@ -10,9 +10,14 @@ import (
 	"github.com/immesys/bw2/objects"
 )
 
+const ElaborateFull = "full"
+const ElaboratePartial = "partial"
+const ElaborateNone = "none"
+
 type PublishParams struct {
 	URI                string
 	PrimaryAccessChain string
+	AutoChain          bool
 	RoutingObjects     []objects.RoutingObject
 	PayloadObjects     []PayloadObject
 	Expiry             *time.Time
@@ -24,6 +29,7 @@ type PublishParams struct {
 type SubscribeParams struct {
 	URI                string
 	PrimaryAccessChain string
+	AutoChain          bool
 	RoutingObjects     []objects.RoutingObject
 	Expiry             *time.Time
 	ExpiryDelta        *time.Duration
@@ -32,24 +38,25 @@ type SubscribeParams struct {
 	LeavePacked        bool
 }
 type ListParams struct {
-	MVK                []byte
-	URISuffix          string
-	PrimaryAccessChain *objects.DChain
+	URI                string
+	PrimaryAccessChain string
+	AutoChain          bool
 	RoutingObjects     []objects.RoutingObject
 	Expiry             *time.Time
 	ExpiryDelta        *time.Duration
-	ElaboratePAC       int
+	ElaboratePAC       string
 	DoVerify           bool
 }
 type QueryParams struct {
-	MVK                []byte
-	URISuffix          string
-	PrimaryAccessChain *objects.DChain
+	URI                string
+	PrimaryAccessChain string
+	AutoChain          bool
 	RoutingObjects     []objects.RoutingObject
 	Expiry             *time.Time
 	ExpiryDelta        *time.Duration
-	ElaboratePAC       int
+	ElaboratePAC       string
 	DoVerify           bool
+	LeavePacked        bool
 }
 type CreateDOTParams struct {
 	IsPermission     bool
@@ -82,7 +89,11 @@ type CreateEntityParams struct {
 	Revokers         []string
 	OmitCreationDate bool
 }
-
+type BuildChainParams struct {
+	URI         string
+	Permissions string
+	To          string
+}
 type SimpleMessage struct {
 	From     string
 	URI      string
@@ -90,9 +101,15 @@ type SimpleMessage struct {
 	ROs      []objects.RoutingObject
 	POErrors []error
 }
+type SimpleChain struct {
+	Hash        string
+	Permissions string
+	URI         string
+	To          string
+}
 
 func (sm *SimpleMessage) Dump() {
-	fmt.Printf("Message from %s on %s:", sm.From, sm.URI)
+	fmt.Printf("Message from %s on %s:\n", sm.From, sm.URI)
 	for _, po := range sm.POs {
 		fmt.Println(po.TextRepresentation())
 	}
@@ -122,4 +139,13 @@ func FromDotForm(dotform string) int {
 		panic(err)
 	}
 	return rv
+}
+
+func (sm *SimpleMessage) GetOnePODF(df string) PayloadObject {
+	for _, p := range sm.POs {
+		if p.IsTypeDF(df) {
+			return p
+		}
+	}
+	return nil
 }

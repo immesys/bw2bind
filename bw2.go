@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"encoding/base64"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
@@ -246,6 +245,9 @@ func (cl *BW2Client) Publish(p *PublishParams) error {
 		cmd = CmdPersist
 	}
 	req := CreateFrame(cmd, seqno)
+	if p.AutoChain {
+		req.AddHeader("autochain", "true")
+	}
 	if p.Expiry != nil {
 		req.AddHeader("expiry", p.Expiry.Format(time.RFC3339))
 	}
@@ -285,6 +287,9 @@ func (cl *BW2Client) Publish(p *PublishParams) error {
 func (cl *BW2Client) Subscribe(p *SubscribeParams) (chan *SimpleMessage, error) {
 	seqno := cl.GetSeqNo()
 	req := CreateFrame(CmdSubscribe, seqno)
+	if p.AutoChain {
+		req.AddHeader("autochain", "true")
+	}
 	if p.Expiry != nil {
 		req.AddHeader("expiry", p.Expiry.Format(time.RFC3339))
 	}
@@ -307,9 +312,7 @@ func (cl *BW2Client) Subscribe(p *SubscribeParams) (chan *SimpleMessage, error) 
 	req.AddHeader("doverify", strconv.FormatBool(p.DoVerify))
 	rsp := cl.transact(req)
 	//First response is the RESP frame
-	fmt.Println("waiting on rsp channel")
 	fr, ok := <-rsp
-	fmt.Println("rsp channel returned")
 	if ok {
 		status, _ := fr.GetFirstHeader("status")
 		if status != "okay" {
@@ -340,11 +343,12 @@ func (cl *BW2Client) Subscribe(p *SubscribeParams) (chan *SimpleMessage, error) 
 			sm.POErrors = errslice
 			rv <- &sm
 		}
+		close(rv)
 	}()
 	return rv, nil
 }
 
-func (cl *BW2Client) SetEntity(keyfile []byte) error {
+func (cl *BW2Client) SetEntity(keyfile []byte) (string, error) {
 	seqno := cl.GetSeqNo()
 	req := CreateFrame(CmdSetEntity, seqno)
 	po := CreateBasePayloadObject(FromDotForm("1.0.1.2"), keyfile)
@@ -356,19 +360,201 @@ func (cl *BW2Client) SetEntity(keyfile []byte) error {
 		status, _ := fr.GetFirstHeader("status")
 		if status != "okay" {
 			msg, _ := fr.GetFirstHeader("reason")
-			return errors.New(msg)
+			return "", errors.New(msg)
 		}
-		return nil
+		vk, _ := fr.GetFirstHeader("vk")
+		return vk, nil
 	}
-	return errors.New("receive channel closed")
+	return "", errors.New("receive channel closed")
 }
 
-func (cl *BW2Client) SetEntityFile(filename string) error {
+func (cl *BW2Client) SetEntityFile(filename string) (string, error) {
 	contents, err := ioutil.ReadFile(filename)
 	if err != nil {
-		return err
+		return "", err
 	}
 	return cl.SetEntity(contents[1:])
+}
+
+func (cl *BW2Client) BuildChain(uri, permissions, to string) (chan *SimpleChain, error) {
+	seqno := cl.GetSeqNo()
+	req := CreateFrame(CmdBuildChain, seqno)
+	req.AddHeader("uri", uri)
+	req.AddHeader("to", to)
+	req.AddHeader("accesspermissions", permissions)
+	rv := make(chan *SimpleChain, 2)
+	rsp := cl.transact(req)
+	proc := func() {
+		for fr := range rsp {
+			hash, _ := fr.GetFirstHeader("hash")
+			permissions, _ := fr.GetFirstHeader("permissions")
+			to, _ := fr.GetFirstHeader("to")
+			uri, _ := fr.GetFirstHeader("uri")
+			sc := SimpleChain{
+				Hash:        hash,
+				Permissions: permissions,
+				To:          to,
+				URI:         uri,
+			}
+			rv <- &sc
+		}
+		cl.closeSeq(seqno)
+		close(rv)
+	}
+	fr, ok := <-rsp
+	if ok {
+		status, _ := fr.GetFirstHeader("status")
+		if status != "okay" {
+			msg, _ := fr.GetFirstHeader("reason")
+			return nil, errors.New(msg)
+		}
+		go proc()
+		return rv, nil
+	} else {
+		return nil, errors.New("receive channel closed")
+	}
+}
+
+func (cl *BW2Client) BuildAnyChain(uri, permissions, to string) (*SimpleChain, error) {
+	rc, err := cl.BuildChain(uri, permissions, to)
+	if err != nil {
+		return nil, err
+	}
+	rv, ok := <-rc
+	if ok {
+		go func() {
+			for _ = range rc {
+			}
+		}()
+		return rv, nil
+	}
+	return nil, errors.New("No result")
+}
+
+func (cl *BW2Client) QueryOne(p *QueryParams) (*SimpleMessage, error) {
+	rvc, err := cl.Query(p)
+	if err != nil {
+		return nil, err
+	}
+	v, ok := <-rvc
+	if !ok {
+		return nil, nil
+	}
+	go func() {
+		for _ = range rvc {
+		}
+	}()
+	return v, nil
+}
+func (cl *BW2Client) Query(p *QueryParams) (chan *SimpleMessage, error) {
+	seqno := cl.GetSeqNo()
+	req := CreateFrame(CmdQuery, seqno)
+	if p.AutoChain {
+		req.AddHeader("autochain", "true")
+	}
+	if p.Expiry != nil {
+		req.AddHeader("expiry", p.Expiry.Format(time.RFC3339))
+	}
+	if p.ExpiryDelta != nil {
+		req.AddHeader("expirydelta", p.ExpiryDelta.String())
+	}
+	req.AddHeader("uri", p.URI)
+	if len(p.PrimaryAccessChain) != 0 {
+		req.AddHeader("primary_access_chain", p.PrimaryAccessChain)
+	}
+	for _, ro := range p.RoutingObjects {
+		req.AddRoutingObject(ro)
+	}
+	if len(p.ElaboratePAC) != 0 {
+		req.AddHeader("elaborate_pac", p.ElaboratePAC)
+	}
+	if !p.LeavePacked {
+		req.AddHeader("unpack", "true")
+	}
+	req.AddHeader("doverify", strconv.FormatBool(p.DoVerify))
+	rsp := cl.transact(req)
+	//First response is the RESP frame
+	fr, ok := <-rsp
+	if ok {
+		status, _ := fr.GetFirstHeader("status")
+		if status != "okay" {
+			msg, _ := fr.GetFirstHeader("reason")
+			return nil, errors.New(msg)
+		}
+	} else {
+		return nil, errors.New("receive channel closed")
+	}
+	//Generate converted output channel
+	rv := make(chan *SimpleMessage, 10)
+	go func() {
+		for f := range rsp {
+			sm := SimpleMessage{}
+			sm.From, _ = f.GetFirstHeader("from")
+			sm.URI, _ = f.GetFirstHeader("uri")
+			sm.ROs = f.GetAllROs()
+			poslice := make([]PayloadObject, f.NumPOs())
+			errslice := make([]error, 0)
+			for i := 0; i < f.NumPOs(); i++ {
+				var err error
+				poslice[i], err = f.GetPO(i)
+				if err != nil {
+					errslice = append(errslice, err)
+				}
+			}
+			sm.POs = poslice
+			sm.POErrors = errslice
+			rv <- &sm
+		}
+		close(rv)
+	}()
+	return rv, nil
+}
+
+func (cl *BW2Client) List(p *ListParams) (chan string, error) {
+	seqno := cl.GetSeqNo()
+	req := CreateFrame(CmdQuery, seqno)
+	if p.AutoChain {
+		req.AddHeader("autochain", "true")
+	}
+	if p.Expiry != nil {
+		req.AddHeader("expiry", p.Expiry.Format(time.RFC3339))
+	}
+	if p.ExpiryDelta != nil {
+		req.AddHeader("expirydelta", p.ExpiryDelta.String())
+	}
+	req.AddHeader("uri", p.URI)
+	if len(p.PrimaryAccessChain) != 0 {
+		req.AddHeader("primary_access_chain", p.PrimaryAccessChain)
+	}
+	for _, ro := range p.RoutingObjects {
+		req.AddRoutingObject(ro)
+	}
+	if len(p.ElaboratePAC) != 0 {
+		req.AddHeader("elaborate_pac", p.ElaboratePAC)
+	}
+	req.AddHeader("doverify", strconv.FormatBool(p.DoVerify))
+	rsp := cl.transact(req)
+	//First response is the RESP frame
+	fr, ok := <-rsp
+	if ok {
+		status, _ := fr.GetFirstHeader("status")
+		if status != "okay" {
+			msg, _ := fr.GetFirstHeader("reason")
+			return nil, errors.New(msg)
+		}
+	} else {
+		return nil, errors.New("receive channel closed")
+	}
+	//Generate converted output channel
+	rv := make(chan string, 10)
+	go func() {
+		for f := range rsp {
+			child, _ := f.GetFirstHeader("child")
+			rv <- child
+		}
+		close(rv)
+	}()
+	return rv, nil
 }
 
 func FmtKey(key []byte) string {
