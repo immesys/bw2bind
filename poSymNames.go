@@ -81,6 +81,13 @@ const PODFMaskBinaryActuation = `1.0.1.0/32`
 const PODFBinaryActuation = `1.0.1.0`
 const POMaskBinaryActuation = 32
 
+//Double (1.0.2.0/32): Double
+//This payload is an 8 byte long IEEE 754 double floating point value
+const PONumDouble = 16777728
+const PODFMaskDouble = `1.0.2.0/32`
+const PODFDouble = `1.0.2.0`
+const POMaskDouble = 32
+
 //SpawnpointLog (2.0.2.0/32): Spawnpoint stdout
 //This contains stdout data from a spawnpoint container. It is a msgpacked
 //dictionary that contains a "service" key, a "time" key (unix nano timestamp)
