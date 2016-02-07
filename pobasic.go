@@ -179,8 +179,3 @@ func (po *MsgPackPayloadObjectImpl) ValueInto(v interface{}) error {
 	err := msgpack.Unmarshal(po.contents, &v)
 	return err
 }
-
-//StringPayloadObject implements 64.0.1.0/32 : String
-func CreateStringPayloadObject(v string) TextPayloadObject {
-	return CreateTextPayloadObject(FromDotForm("64.0.1.0"), v)
-}
