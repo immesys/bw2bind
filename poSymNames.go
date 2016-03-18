@@ -74,6 +74,32 @@ const PODFMaskYAML = `67.0.0.0/8`
 const PODFYAML = `67.0.0.0`
 const POMaskYAML = 8
 
+//LogDict (2.0.1.0/24): LogDict
+//This class is for log messages encoded in msgpack
+const PONumLogDict = 33554688
+const PODFMaskLogDict = `2.0.1.0/24`
+const PODFLogDict = `2.0.1.0`
+const POMaskLogDict = 24
+
+//HamiltonBase (2.0.4.0/24): Hamilton Messages
+//This is the base class for messages used with the Hamilton motes. The only
+//key guaranteed is "#" that contains a uint16 representation of the serial of
+//the mote the message is destined for or originated from.
+const PONumHamiltonBase = 33555456
+const PODFMaskHamiltonBase = `2.0.4.0/24`
+const PODFHamiltonBase = `2.0.4.0`
+const POMaskHamiltonBase = 24
+
+//HamiltonTelemetry (2.0.4.64/26): Hamilton Telemetry
+//This object contains a "#" field for the serial number, as well as possibly
+//containing an "A" field with a list of X, Y, and Z accelerometer values. A
+//"T" field containing the temperature as an integer in degrees C multiplied by
+//10000, and an "L" field containing the illumination in Lux.
+const PONumHamiltonTelemetry = 33555520
+const PODFMaskHamiltonTelemetry = `2.0.4.64/26`
+const PODFHamiltonTelemetry = `2.0.4.64`
+const POMaskHamiltonTelemetry = 26
+
 //BinaryActuation (1.0.1.0/32): Binary actuation
 //This payload object is one byte long, 0x00 for off, 0x01 for on.
 const PONumBinaryActuation = 16777472
@@ -81,8 +107,18 @@ const PODFMaskBinaryActuation = `1.0.1.0/32`
 const PODFBinaryActuation = `1.0.1.0`
 const POMaskBinaryActuation = 32
 
+//BWMessage (1.0.1.1/32): Packed Bosswave Message
+//This object contains an entire signed and encoded bosswave message
+const PONumBWMessage = 16777473
+const PODFMaskBWMessage = `1.0.1.1/32`
+const PODFBWMessage = `1.0.1.1`
+const POMaskBWMessage = 32
+
 //Double (1.0.2.0/32): Double
-//This payload is an 8 byte long IEEE 754 double floating point value
+//This payload is an 8 byte long IEEE 754 double floating point value encoded
+//in little endian. This should only be used if the semantic meaning is obvious
+//in the context, otherwise a PID with a more specific semantic meaning should
+//be used.
 const PONumDouble = 16777728
 const PODFMaskDouble = `1.0.2.0/32`
 const PODFDouble = `1.0.2.0`
@@ -114,6 +150,13 @@ const PONumString = 1073742080
 const PODFMaskString = `64.0.1.0/32`
 const PODFString = `64.0.1.0`
 const POMaskString = 32
+
+//FMDIntentString (64.0.1.1/32): FMD Intent String
+//A plain string used as an intent for the follow-me display service.
+const PONumFMDIntentString = 1073742081
+const PODFMaskFMDIntentString = `64.0.1.1/32`
+const PODFFMDIntentString = `64.0.1.1`
+const POMaskFMDIntentString = 32
 
 //SpawnpointConfig (67.0.2.0/32): SpawnPoint config
 //A configuration file for SpawnPoint (github.com/immesys/spawnpoint)

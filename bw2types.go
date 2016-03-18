@@ -10,6 +10,7 @@ import (
 	"github.com/immesys/bw2/objects"
 )
 
+const ElaborateDefault = ""
 const ElaborateFull = "full"
 const ElaboratePartial = "partial"
 const ElaborateNone = "none"
@@ -23,7 +24,7 @@ type PublishParams struct {
 	Expiry             *time.Time
 	ExpiryDelta        *time.Duration
 	ElaboratePAC       string
-	DoVerify           bool
+	DoNotVerify        bool
 	Persist            bool
 }
 type SubscribeParams struct {
@@ -34,7 +35,7 @@ type SubscribeParams struct {
 	Expiry             *time.Time
 	ExpiryDelta        *time.Duration
 	ElaboratePAC       string
-	DoVerify           bool
+	DoNotVerify        bool
 	LeavePacked        bool
 }
 type ListParams struct {
@@ -45,7 +46,7 @@ type ListParams struct {
 	Expiry             *time.Time
 	ExpiryDelta        *time.Duration
 	ElaboratePAC       string
-	DoVerify           bool
+	DoNotVerify        bool
 }
 type QueryParams struct {
 	URI                string
@@ -55,7 +56,7 @@ type QueryParams struct {
 	Expiry             *time.Time
 	ExpiryDelta        *time.Duration
 	ElaboratePAC       string
-	DoVerify           bool
+	DoNotVerify        bool
 	LeavePacked        bool
 }
 type CreateDOTParams struct {

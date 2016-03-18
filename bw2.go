@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
@@ -17,20 +18,38 @@ import (
 )
 
 type BW2Client struct {
-	c         net.Conn
-	out       *bufio.Writer
-	in        *bufio.Reader
-	remotever string
-	seqnos    map[int]chan *Frame
-	olock     sync.Mutex
-	curseqno  uint32
+	c            net.Conn
+	out          *bufio.Writer
+	in           *bufio.Reader
+	remotever    string
+	seqnos       map[int]chan *Frame
+	olock        sync.Mutex
+	curseqno     uint32
+	defAutoChain *bool
 }
 
 func (cl *BW2Client) GetSeqNo() int {
 	newseqno := atomic.AddUint32(&cl.curseqno, 1)
 	return int(newseqno)
 }
+func (cl *BW2Client) OverrideAutoChainTo(v bool) {
+	cl.defAutoChain = &v
+}
+func (cl *BW2Client) ClearAutoChainOverride() {
+	cl.defAutoChain = nil
+}
 func Connect(to string) (*BW2Client, error) {
+	if to == "" {
+		to = "localhost:28589"
+	}
+	_, _, err := net.SplitHostPort(to)
+	if err != nil && err.Error() == "missing port in address" {
+		to = to + ":28589"
+		_, _, err = net.SplitHostPort(to)
+	}
+	if err != nil {
+		return nil, err
+	}
 	conn, err := net.Dial("tcp", to)
 	if err != nil {
 		return nil, err
@@ -93,7 +112,18 @@ func Connect(to string) (*BW2Client, error) {
 		conn.Close()
 		return nil, errors.New("Timeout on HELO")
 	}
+}
 
+//ConnectOrExit is the same as Connect but will
+//print an error message to stderr and exit if the connection
+//fails
+func ConnectOrExit(to string) *BW2Client {
+	bw, err := Connect(to)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Could not connect to local BW2 router:", err.Error())
+		os.Exit(1)
+	}
+	return bw
 }
 
 //Sends a request frame and returns a frame that contains all the responses.
@@ -245,6 +275,9 @@ func (cl *BW2Client) Publish(p *PublishParams) error {
 		cmd = CmdPersist
 	}
 	req := CreateFrame(cmd, seqno)
+	if cl.defAutoChain != nil {
+		p.AutoChain = *cl.defAutoChain
+	}
 	if p.AutoChain {
 		req.AddHeader("autochain", "true")
 	}
@@ -265,10 +298,11 @@ func (cl *BW2Client) Publish(p *PublishParams) error {
 	for _, po := range p.PayloadObjects {
 		req.AddPayloadObject(po)
 	}
-	if len(p.ElaboratePAC) != 0 {
-		req.AddHeader("elaborate_pac", p.ElaboratePAC)
+	if p.ElaboratePAC == "" {
+		p.ElaboratePAC = ElaborateFull
 	}
-	req.AddHeader("doverify", strconv.FormatBool(p.DoVerify))
+	req.AddHeader("elaborate_pac", p.ElaboratePAC)
+	req.AddHeader("doverify", strconv.FormatBool(!p.DoNotVerify))
 	req.AddHeader("persist", strconv.FormatBool(p.Persist))
 	rsp := cl.transact(req)
 	fr, ok := <-rsp
@@ -287,6 +321,9 @@ func (cl *BW2Client) Publish(p *PublishParams) error {
 func (cl *BW2Client) Subscribe(p *SubscribeParams) (chan *SimpleMessage, error) {
 	seqno := cl.GetSeqNo()
 	req := CreateFrame(CmdSubscribe, seqno)
+	if cl.defAutoChain != nil {
+		p.AutoChain = *cl.defAutoChain
+	}
 	if p.AutoChain {
 		req.AddHeader("autochain", "true")
 	}
@@ -303,13 +340,14 @@ func (cl *BW2Client) Subscribe(p *SubscribeParams) (chan *SimpleMessage, error) 
 	for _, ro := range p.RoutingObjects {
 		req.AddRoutingObject(ro)
 	}
-	if len(p.ElaboratePAC) != 0 {
-		req.AddHeader("elaborate_pac", p.ElaboratePAC)
+	if p.ElaboratePAC == "" {
+		p.ElaboratePAC = ElaborateFull
 	}
+	req.AddHeader("elaborate_pac", p.ElaboratePAC)
 	if !p.LeavePacked {
 		req.AddHeader("unpack", "true")
 	}
-	req.AddHeader("doverify", strconv.FormatBool(p.DoVerify))
+	req.AddHeader("doverify", strconv.FormatBool(!p.DoNotVerify))
 	rsp := cl.transact(req)
 	//First response is the RESP frame
 	fr, ok := <-rsp
@@ -368,6 +406,14 @@ func (cl *BW2Client) SetEntity(keyfile []byte) (string, error) {
 	return "", errors.New("receive channel closed")
 }
 
+func (cl *BW2Client) SetEntityFileOrExit(filename string) string {
+	rv, e := cl.SetEntityFile(filename)
+	if e != nil {
+		fmt.Fprintln(os.Stderr, "Could not set entity file:", e.Error())
+		os.Exit(1)
+	}
+	return rv
+}
 func (cl *BW2Client) SetEntityFile(filename string) (string, error) {
 	contents, err := ioutil.ReadFile(filename)
 	if err != nil {
@@ -449,6 +495,9 @@ func (cl *BW2Client) QueryOne(p *QueryParams) (*SimpleMessage, error) {
 func (cl *BW2Client) Query(p *QueryParams) (chan *SimpleMessage, error) {
 	seqno := cl.GetSeqNo()
 	req := CreateFrame(CmdQuery, seqno)
+	if cl.defAutoChain != nil {
+		p.AutoChain = *cl.defAutoChain
+	}
 	if p.AutoChain {
 		req.AddHeader("autochain", "true")
 	}
@@ -465,13 +514,14 @@ func (cl *BW2Client) Query(p *QueryParams) (chan *SimpleMessage, error) {
 	for _, ro := range p.RoutingObjects {
 		req.AddRoutingObject(ro)
 	}
-	if len(p.ElaboratePAC) != 0 {
-		req.AddHeader("elaborate_pac", p.ElaboratePAC)
+	if p.ElaboratePAC == "" {
+		p.ElaboratePAC = ElaborateFull
 	}
+	req.AddHeader("elaborate_pac", p.ElaboratePAC)
 	if !p.LeavePacked {
 		req.AddHeader("unpack", "true")
 	}
-	req.AddHeader("doverify", strconv.FormatBool(p.DoVerify))
+	req.AddHeader("doverify", strconv.FormatBool(!p.DoNotVerify))
 	rsp := cl.transact(req)
 	//First response is the RESP frame
 	fr, ok := <-rsp
@@ -513,6 +563,9 @@ func (cl *BW2Client) Query(p *QueryParams) (chan *SimpleMessage, error) {
 func (cl *BW2Client) List(p *ListParams) (chan string, error) {
 	seqno := cl.GetSeqNo()
 	req := CreateFrame(CmdQuery, seqno)
+	if cl.defAutoChain != nil {
+		p.AutoChain = *cl.defAutoChain
+	}
 	if p.AutoChain {
 		req.AddHeader("autochain", "true")
 	}
@@ -529,10 +582,11 @@ func (cl *BW2Client) List(p *ListParams) (chan string, error) {
 	for _, ro := range p.RoutingObjects {
 		req.AddRoutingObject(ro)
 	}
-	if len(p.ElaboratePAC) != 0 {
-		req.AddHeader("elaborate_pac", p.ElaboratePAC)
+	if p.ElaboratePAC == "" {
+		p.ElaboratePAC = ElaborateFull
 	}
-	req.AddHeader("doverify", strconv.FormatBool(p.DoVerify))
+	req.AddHeader("elaborate_pac", p.ElaboratePAC)
+	req.AddHeader("doverify", strconv.FormatBool(!p.DoNotVerify))
 	rsp := cl.transact(req)
 	//First response is the RESP frame
 	fr, ok := <-rsp

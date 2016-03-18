@@ -1,6 +1,8 @@
 package bw2bind
 
 import (
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -74,7 +76,7 @@ func (po *PayloadObjectImpl) GetPODotNum() string {
 	return fmt.Sprintf("%d.%d.%d.%d", po.ponum>>24, (po.ponum>>16)&0xFF, (po.ponum>>8)&0xFF, po.ponum&0xFF)
 }
 func (po *PayloadObjectImpl) TextRepresentation() string {
-	return fmt.Sprintf("PO %s len %d", PONumDotForm(po.ponum), len(po.contents))
+	return fmt.Sprintf("PO %s len %d (generic) hexdump:", PONumDotForm(po.ponum), len(po.contents), hex.Dump(po.contents))
 }
 func (po *PayloadObjectImpl) IsType(ponum, mask int) bool {
 	return (ponum >> uint(32-mask)) == (po.ponum >> uint(32-mask))
@@ -116,7 +118,7 @@ func CreateTextPayloadObject(ponum int, contents string) *TextPayloadObjectImpl 
 	return rv
 }
 func (po *TextPayloadObjectImpl) TextRepresentation() string {
-	return fmt.Sprintf("PO %s len %d:\n%s", PONumDotForm(po.ponum), len(po.contents), string(po.contents))
+	return fmt.Sprintf("PO %s len %d (human readable) contents:\n%s", PONumDotForm(po.ponum), len(po.contents), string(po.contents))
 }
 func (po *TextPayloadObjectImpl) Value() string {
 	return string(po.contents)
@@ -178,6 +180,17 @@ func CreateMsgPackPayloadObject(ponum int, value interface{}) (*MsgPackPayloadOb
 func (po *MsgPackPayloadObjectImpl) ValueInto(v interface{}) error {
 	err := msgpack.Unmarshal(po.contents, &v)
 	return err
+}
+func (po *MsgPackPayloadObjectImpl) TextRepresentation() string {
+	var x map[string]interface{}
+	e := po.ValueInto(&x)
+	if e == nil {
+		b, err := json.MarshalIndent(x, "", "  ")
+		if err == nil {
+			return fmt.Sprintf("PO %s len %d (msgpack) contents:\n%+v", PONumDotForm(po.ponum), len(po.contents), string(b))
+		}
+	}
+	return fmt.Sprintf("PO %s len %d (msgpack) contents undecodable, hexdump:\n%s", PONumDotForm(po.ponum), len(po.contents), hex.Dump(po.contents))
 }
 
 //StringPayloadObject implements 64.0.1.0/32 : String
