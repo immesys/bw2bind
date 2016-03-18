@@ -193,8 +193,3 @@ func (po *MsgPackPayloadObjectImpl) TextRepresentation() string {
 	}
 	return fmt.Sprintf("PO %s len %d (msgpack) contents undecodable, hexdump:\n%s", PONumDotForm(po.ponum), len(po.contents), hex.Dump(po.contents))
 }
-
-//StringPayloadObject implements 64.0.1.0/32 : String
-func CreateStringPayloadObject(v string) TextPayloadObject {
-	return CreateTextPayloadObject(FromDotForm("64.0.1.0"), v)
-}
