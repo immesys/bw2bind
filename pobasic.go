@@ -181,6 +181,7 @@ func (po *MsgPackPayloadObjectImpl) ValueInto(v interface{}) error {
 	err := msgpack.Unmarshal(po.contents, &v)
 	return err
 }
+
 func (po *MsgPackPayloadObjectImpl) TextRepresentation() string {
 	var x map[string]interface{}
 	e := po.ValueInto(&x)
