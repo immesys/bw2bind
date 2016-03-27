@@ -461,6 +461,15 @@ func (cl *BW2Client) BuildChain(uri, permissions, to string) (chan *SimpleChain,
 	}
 }
 
+func (cl *BW2Client) BuildAnyChainOrExit(uri, permissions, to string) *SimpleChain {
+	rv, e := cl.BuildAnyChain(uri, permissions, to)
+	if e != nil || rv == nil {
+		fmt.Fprintf(os.Stderr, "Could not build chain to %s granting %s: %s", uri, permissions, e.Error())
+		os.Exit(1)
+	}
+	return rv
+}
+
 func (cl *BW2Client) BuildAnyChain(uri, permissions, to string) (*SimpleChain, error) {
 	rc, err := cl.BuildChain(uri, permissions, to)
 	if err != nil {
