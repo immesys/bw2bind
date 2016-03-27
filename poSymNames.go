@@ -81,6 +81,15 @@ const PODFMaskLogDict = `2.0.1.0/24`
 const PODFLogDict = `2.0.1.0`
 const POMaskLogDict = 24
 
+//TSTaggedMP (2.0.3.0/24): TSTaggedMP
+//This superclass describes "ts"->int64 tagged msgpack objects. The timestamp
+//is used for merging entries and determining which is later and should be the
+//final value.
+const PONumTSTaggedMP = 33555200
+const PODFMaskTSTaggedMP = `2.0.3.0/24`
+const PODFTSTaggedMP = `2.0.3.0`
+const POMaskTSTaggedMP = 24
+
 //HamiltonBase (2.0.4.0/24): Hamilton Messages
 //This is the base class for messages used with the Hamilton motes. The only
 //key guaranteed is "#" that contains a uint16 representation of the serial of
@@ -141,6 +150,15 @@ const PONumSMetadata = 33555201
 const PODFMaskSMetadata = `2.0.3.1/32`
 const PODFSMetadata = `2.0.3.1`
 const POMaskSMetadata = 32
+
+//HSBLightMessage (2.0.5.1/32): HSBLight Message
+//This object may contain "hue", "saturation", "brightness" fields with a float
+//from 0 to 1. It may also contain an "on" key with a boolean. Omitting fields
+//leaves them at their previous state.
+const PONumHSBLightMessage = 33555713
+const PODFMaskHSBLightMessage = `2.0.5.1/32`
+const PODFHSBLightMessage = `2.0.5.1`
+const POMaskHSBLightMessage = 32
 
 //String (64.0.1.0/32): String
 //A plain string with no rigid semantic meaning. This can be thought of as a
