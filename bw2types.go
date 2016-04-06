@@ -107,6 +107,7 @@ type SimpleChain struct {
 	Permissions string
 	URI         string
 	To          string
+	Content     []byte
 }
 
 func (sm *SimpleMessage) Dump() {

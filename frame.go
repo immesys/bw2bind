@@ -20,9 +20,6 @@ const (
 	CmdQuery        = "quer"
 	CmdTapSubscribe = "tsub"
 	CmdTapQuery     = "tque"
-	CmdPutDot       = "putd"
-	CmdPutEntity    = "pute"
-	CmdPutChain     = "putc"
 	CmdMakeDot      = "makd"
 	CmdMakeEntity   = "make"
 	CmdMakeChain    = "makc"
@@ -32,6 +29,23 @@ const (
 	CmdDelPrefDot   = "dlpd"
 	CmdDelPrefChain = "dlpc"
 	CmdSetEntity    = "sete"
+
+	//New for 2.1.x
+	CmdPutDot                = "putd"
+	CmdPutEntity             = "pute"
+	CmdPutChain              = "putc"
+	CmdEntityBalances        = "ebal"
+	CmdAddressBalance        = "abal"
+	CmdBCInteractionParams   = "bcip"
+	CmdTransfer              = "xfer"
+	CmdMakeShortAlias        = "mksa"
+	CmdMakeLongAlias         = "mkla"
+	CmdResolveAlias          = "resa"
+	CmdNewDROffer            = "ndro"
+	CmdAcceptDROffer         = "adro"
+	CmdResolveRegistryObject = "rsro"
+	CmdUpdateSRVRecord       = "usrv"
+	CmdListDROffers          = "ldro"
 
 	CmdResponse = "resp"
 	CmdResult   = "rslt"
@@ -157,7 +171,35 @@ func (f *Frame) AddPayloadObject(po PayloadObject) {
 	//3 for "po ",                  colon                space                newline                   newline
 	f.Length += 3 + len(pe.StrPONum) + 1 + len(pe.StrPODotForm) + 1 + len(pe.StrLen) + 1 + len(po.GetContents()) + 1
 }
-
+func (f *Frame) MustResponse() error {
+	response, err := f.IsResponse()
+	if !response {
+		msg := ""
+		if err != nil {
+			msg = err.Error()
+		}
+		return fmt.Errorf("Expecting RESP frame %s\n", msg)
+	}
+	return err
+}
+func (f *Frame) IsResponse() (bool, error) {
+	if f == nil {
+		return true, fmt.Errorf("channel closed early")
+	}
+	if f.Cmd == CmdResponse {
+		st, stok := f.GetFirstHeader("status")
+		if !stok {
+			panic("Should not hit this")
+		}
+		if st == "okay" {
+			return true, nil
+		}
+		code, _ := f.GetFirstHeader("code")
+		msg, _ := f.GetFirstHeader("reason")
+		return true, fmt.Errorf("[%s] %s", code, msg)
+	}
+	return false, nil
+}
 func (f *Frame) WriteToStream(s *bufio.Writer) {
 	s.WriteString(fmt.Sprintf("%4s %010d %010d\n", f.Cmd, f.Length, f.SeqNo))
 	for _, v := range f.Headers {
