@@ -13,7 +13,7 @@ import (
 	"time"
 
 	log "github.com/cihub/seelog"
-	"github.com/immesys/bw2/objects"
+	"gopkg.in/immesys/bw2.v2/objects"
 )
 
 func (cl *BW2Client) OverrideAutoChainTo(v bool) {
@@ -226,6 +226,13 @@ func (cl *BW2Client) CreateDotChain(p *CreateDotChainParams) (string, *objects.D
 	return hash, ro.(*objects.DChain), nil
 }
 
+func (cl *BW2Client) PublishOrExit(p *PublishParams) {
+	e := cl.Publish(p)
+	if e != nil {
+		fmt.Println("Could not publish:", e)
+		os.Exit(1)
+	}
+}
 func (cl *BW2Client) Publish(p *PublishParams) error {
 	seqno := cl.GetSeqNo()
 	cmd := CmdPublish
@@ -266,6 +273,16 @@ func (cl *BW2Client) Publish(p *PublishParams) error {
 	fr, _ := <-rsp
 	err := fr.MustResponse()
 	return err
+}
+
+func (cl *BW2Client) SubscribeOrExit(p *SubscribeParams) chan *SimpleMessage {
+	rv, err := cl.Subscribe(p)
+	if err == nil {
+		return rv
+	}
+	fmt.Println("Could not subscribe:", err)
+	os.Exit(1)
+	return nil
 }
 
 func (cl *BW2Client) Subscribe(p *SubscribeParams) (chan *SimpleMessage, error) {

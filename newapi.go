@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/immesys/bw2/crypto"
-	"github.com/immesys/bw2/objects"
+	"gopkg.in/immesys/bw2.v2/crypto"
+	"gopkg.in/immesys/bw2.v2/objects"
 )
 
 func (cl *BW2Client) PublishDOTWithAcc(blob []byte, account int) (string, error) {
