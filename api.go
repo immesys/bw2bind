@@ -398,18 +398,13 @@ func (cl *BW2Client) BuildChain(uri, permissions, to string) (chan *SimpleChain,
 		}
 		close(rv)
 	}
-	fr, ok := <-rsp
-	if ok {
-		status, _ := fr.GetFirstHeader("status")
-		if status != "okay" {
-			msg, _ := fr.GetFirstHeader("reason")
-			return nil, errors.New(msg)
-		}
-		go proc()
-		return rv, nil
-	} else {
-		return nil, errors.New("receive channel closed")
+	fr, _ := <-rsp
+	err := fr.MustResponse()
+	if err != nil {
+		return nil, err
 	}
+	go proc()
+	return rv, nil
 }
 
 func (cl *BW2Client) BuildAnyChainOrExit(uri, permissions, to string) *SimpleChain {

@@ -222,6 +222,9 @@ type CurrentBCIP struct {
 	Maxage        int64
 	CurrentAge    time.Duration
 	CurrentBlock  uint64
+	Peers         int64
+	HighestBlock  int64
+	Difficulty    int64
 }
 
 func (cl *BW2Client) GetBCInteractionParams() (*CurrentBCIP, error) {
@@ -261,6 +264,15 @@ func (cl *BW2Client) SetBCInteractionParams(to *BCIP) (*CurrentBCIP, error) {
 	v, _ = fr.GetFirstHeader("currentage")
 	iv, _ = strconv.ParseInt(v, 10, 64)
 	rv.CurrentAge = time.Duration(iv) * time.Second
+	v, _ = fr.GetFirstHeader("peers")
+	iv, _ = strconv.ParseInt(v, 10, 64)
+	rv.Peers = iv
+	v, _ = fr.GetFirstHeader("highest")
+	iv, _ = strconv.ParseInt(v, 10, 64)
+	rv.HighestBlock = iv
+	v, _ = fr.GetFirstHeader("difficulty")
+	iv, _ = strconv.ParseInt(v, 10, 64)
+	rv.Difficulty = iv
 	return rv, nil
 }
 
