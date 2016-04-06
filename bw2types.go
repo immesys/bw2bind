@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/immesys/bw2.v3/objects"
+	"github.com/immesys/bw2/objects"
 )
 
 const ElaborateDefault = ""

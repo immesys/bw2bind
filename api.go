@@ -13,7 +13,7 @@ import (
 	"time"
 
 	log "github.com/cihub/seelog"
-	"gopkg.in/immesys/bw2.v3/objects"
+	"github.com/immesys/bw2/objects"
 )
 
 func (cl *BW2Client) OverrideAutoChainTo(v bool) {
