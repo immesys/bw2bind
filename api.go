@@ -464,6 +464,14 @@ func (cl *BW2Client) QueryOne(p *QueryParams) (*SimpleMessage, error) {
 	}()
 	return v, nil
 }
+func (cl *BW2Client) QueryOrExit(p *QueryParams) chan *SimpleMessage {
+	rv, e := cl.Query(p)
+	if e != nil {
+		fmt.Println("Could not query:", e)
+		os.Exit(1)
+	}
+	return rv
+}
 func (cl *BW2Client) Query(p *QueryParams) (chan *SimpleMessage, error) {
 	seqno := cl.GetSeqNo()
 	req := CreateFrame(CmdQuery, seqno)
@@ -496,16 +504,12 @@ func (cl *BW2Client) Query(p *QueryParams) (chan *SimpleMessage, error) {
 	req.AddHeader("doverify", strconv.FormatBool(!p.DoNotVerify))
 	rsp := cl.transact(req)
 	//First response is the RESP frame
-	fr, ok := <-rsp
-	if ok {
-		status, _ := fr.GetFirstHeader("status")
-		if status != "okay" {
-			msg, _ := fr.GetFirstHeader("reason")
-			return nil, errors.New(msg)
-		}
-	} else {
-		return nil, errors.New("receive channel closed")
+	fr, _ := <-rsp
+	err := fr.MustResponse()
+	if err != nil {
+		return nil, err
 	}
+
 	//Generate converted output channel
 	rv := make(chan *SimpleMessage, 10)
 	go func() {
