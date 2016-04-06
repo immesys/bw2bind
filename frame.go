@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"gopkg.in/immesys/bw2.v2.1/objects"
+	"gopkg.in/immesys/bw2.v3/objects"
 )
 
 const (
