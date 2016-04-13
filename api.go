@@ -521,6 +521,17 @@ func (cl *BW2Client) BuildAnyChain(uri, permissions, to string) (*SimpleChain, e
 	return nil, errors.New("No result")
 }
 
+// QueryOneOrExit is like QueryOne but prints an error message and exits if
+// the operation does not succeed
+func (cl *BW2Client) QueryOneOrExit(p *QueryParams) *SimpleMessage {
+	rv, err := cl.QueryOne(p)
+	if err != nil {
+		fmt.Printf("Could not query: %v\n", err)
+		os.Exit(1)
+	}
+	return rv
+}
+
 // QueryOne calls Query but only returns the first result
 func (cl *BW2Client) QueryOne(p *QueryParams) (*SimpleMessage, error) {
 	rvc, err := cl.Query(p)
