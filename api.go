@@ -16,17 +16,46 @@ import (
 	"github.com/immesys/bw2/objects"
 )
 
+// SilenceLog will redirect the log output typically emitted by bw2bind to
+// a file (.bw2bind.log) in the working directory. It is useful for interactive
+// applications that do not wish log output to interfere.
+func SilenceLog() {
+	cfg := `
+	<seelog>
+    <outputs>
+        <splitter formatid="common">
+            <file path=".bw2bind.log"/>
+        </splitter>
+    </outputs>
+		<formats>
+				<format id="common" format="[%LEV] %Time %Date %File:%Line %Msg%n"/>
+		</formats>
+	</seelog>`
+	nlogger, err := log.LoggerFromConfigAsString(cfg)
+	if err == nil {
+		log.ReplaceLogger(nlogger)
+	} else {
+		fmt.Printf("Bad log config: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// OverrideAutoChainTo(v) will set the value of the AutoChain parameter to v
+// for any subsequent Publish or Consume operations, it exists purely as a
+// convenience. Do note that even if AutoChain is specified for these operations,
+// this setting will always override it.
 func (cl *BW2Client) OverrideAutoChainTo(v bool) {
 	cl.defAutoChain = &v
 }
+
+// ClearAutoChainOverride will remove the AutoChain override, allowing the
+// per-call AutoChain setting to take effect.
 func (cl *BW2Client) ClearAutoChainOverride() {
 	cl.defAutoChain = nil
 }
 
-func (cl *BW2Client) GetSeqNo() int {
-	newseqno := atomic.AddUint32(&cl.curseqno, 1)
-	return int(newseqno)
-}
+// Connect will connect to a BOSSWAVE local router. If "to" is the empty
+// string, it will default to localhost port 28589
 func Connect(to string) (*BW2Client, error) {
 	if to == "" {
 		to = "localhost:28589"
@@ -46,26 +75,28 @@ func Connect(to string) (*BW2Client, error) {
 	rv := &BW2Client{c: conn,
 		out:    bufio.NewWriter(conn),
 		in:     bufio.NewReader(conn),
-		seqnos: make(map[int]chan *Frame)}
+		seqnos: make(map[int]chan *frame),
+		rHost:  to,
+	}
 
 	//As a bit of a sanity check, we read the first frame, which is the
 	//server HELO message
 	ok := make(chan bool, 1)
 	go func() {
-		helo, err := LoadFrameFromStream(rv.in)
+		helo, err := loadFrameFromStream(rv.in)
 		if err != nil {
 			log.Error("Malformed HELO frame: ", err)
 			ok <- false
 			return
 		}
-		if helo.Cmd != CmdHello {
-			log.Error("Frame not HELO")
+		if helo.Cmd != cmdHello {
+			log.Error("frame not HELO")
 			ok <- false
 			return
 		}
 		rver, hok := helo.GetFirstHeader("version")
 		if !hok {
-			log.Error("Frame has no version")
+			log.Error("frame has no version")
 			ok <- false
 			return
 		}
@@ -94,7 +125,7 @@ func Connect(to string) (*BW2Client, error) {
 			//Reader:
 			go func() {
 				for {
-					frame, err := LoadFrameFromStream(rv.in)
+					frame, err := loadFrameFromStream(rv.in)
 					if err != nil {
 						log.Error("Invalid frame")
 						log.Flush()
@@ -118,9 +149,9 @@ func Connect(to string) (*BW2Client, error) {
 	}
 }
 
-//ConnectOrExit is the same as Connect but will
-//print an error message to stderr and exit if the connection
-//fails
+// ConnectOrExit is the same as Connect but will
+// print an error message to stderr and exit the program if the connection
+// fails
 func ConnectOrExit(to string) *BW2Client {
 	bw, err := Connect(to)
 	if err != nil {
@@ -130,9 +161,11 @@ func ConnectOrExit(to string) *BW2Client {
 	return bw
 }
 
+// CreateEntity will create a new entity and return the verifying key and the
+// binary representation
 func (cl *BW2Client) CreateEntity(p *CreateEntityParams) (string, []byte, error) {
 	seqno := cl.GetSeqNo()
-	req := CreateFrame(CmdMakeEntity, seqno)
+	req := createFrame(cmdMakeEntity, seqno)
 	if p.Expiry != nil {
 		req.AddHeader("expiry", p.Expiry.Format(time.RFC3339))
 	}
@@ -162,9 +195,11 @@ func (cl *BW2Client) CreateEntity(p *CreateEntityParams) (string, []byte, error)
 	return vk, po, nil
 }
 
+// CreateDOT will create a new Declaration of Trust and return the
+// DOT Hash and the binary representation
 func (cl *BW2Client) CreateDOT(p *CreateDOTParams) (string, []byte, error) {
 	seqno := cl.GetSeqNo()
-	req := CreateFrame(CmdMakeDot, seqno)
+	req := createFrame(cmdMakeDot, seqno)
 	if p.Expiry != nil {
 		req.AddHeader("expiry", p.Expiry.Format(time.RFC3339))
 	}
@@ -203,9 +238,12 @@ func (cl *BW2Client) CreateDOT(p *CreateDOTParams) (string, []byte, error) {
 	return hash, po, nil
 }
 
-func (cl *BW2Client) CreateDotChain(p *CreateDotChainParams) (string, *objects.DChain, error) {
+// CreateDOTChain will manually create a DOT chain. This is not a commonly
+// used method, as typically you will rely on the local router to create the
+// the chain, either via specifying AutoChain = true, or by using BuildChain
+func (cl *BW2Client) CreateDOTChain(p *CreateDotChainParams) (string, *objects.DChain, error) {
 	seqno := cl.GetSeqNo()
-	req := CreateFrame(CmdMakeChain, seqno)
+	req := createFrame(cmdMakeChain, seqno)
 	req.AddHeader("ispermission", strconv.FormatBool(p.IsPermission))
 	req.AddHeader("unelaborate", strconv.FormatBool(p.UnElaborate))
 	for _, dot := range p.DOTs {
@@ -226,6 +264,8 @@ func (cl *BW2Client) CreateDotChain(p *CreateDotChainParams) (string, *objects.D
 	return hash, ro.(*objects.DChain), nil
 }
 
+// PublishOrExit is the same as Publish but will print an error message and
+// exit the program if the operation does not succeed.
 func (cl *BW2Client) PublishOrExit(p *PublishParams) {
 	e := cl.Publish(p)
 	if e != nil {
@@ -233,13 +273,20 @@ func (cl *BW2Client) PublishOrExit(p *PublishParams) {
 		os.Exit(1)
 	}
 }
+
+// Publish sends a message with the given PublishParams, for example:
+//  client.Publish(&bw2bind.PublishParams{
+//			URI : name.space/my/path,
+//			AutoChain : true,
+//			PayloadObjects : myPoSlice,
+//	})
 func (cl *BW2Client) Publish(p *PublishParams) error {
 	seqno := cl.GetSeqNo()
-	cmd := CmdPublish
+	cmd := cmdPublish
 	if p.Persist {
-		cmd = CmdPersist
+		cmd = cmdPersist
 	}
-	req := CreateFrame(cmd, seqno)
+	req := createFrame(cmd, seqno)
 	if cl.defAutoChain != nil {
 		p.AutoChain = *cl.defAutoChain
 	}
@@ -275,6 +322,8 @@ func (cl *BW2Client) Publish(p *PublishParams) error {
 	return err
 }
 
+// SubscribeOrExit is just like subscribe but will print an error message
+// and exit the program if the operation does not succeed
 func (cl *BW2Client) SubscribeOrExit(p *SubscribeParams) chan *SimpleMessage {
 	rv, err := cl.Subscribe(p)
 	if err == nil {
@@ -285,9 +334,11 @@ func (cl *BW2Client) SubscribeOrExit(p *SubscribeParams) chan *SimpleMessage {
 	return nil
 }
 
+// Subscribe will consume a URI specified by SubscribeParams, it returns a
+// channel that received messages will be written to.
 func (cl *BW2Client) Subscribe(p *SubscribeParams) (chan *SimpleMessage, error) {
 	seqno := cl.GetSeqNo()
-	req := CreateFrame(CmdSubscribe, seqno)
+	req := createFrame(cmdSubscribe, seqno)
 	if cl.defAutoChain != nil {
 		p.AutoChain = *cl.defAutoChain
 	}
@@ -348,21 +399,30 @@ func (cl *BW2Client) Subscribe(p *SubscribeParams) (chan *SimpleMessage, error) 
 	return rv, nil
 }
 
-func (cl *BW2Client) SetEntity(keyfile []byte) (string, error) {
+// SetEntity will tell your local router "who you are". This is the
+// entity that will be used to sign messages. It takes a binary
+// representation of an Entity, as obtained from objects.Entity.GetSigningBlob.
+// Note that if you have read an on-disk entity file (as made by bw2 mke),
+// those routing object files have a one byte type header that must be stripped.
+// Consider using SetEntityFile. This operation returns the entity's VK
+func (cl *BW2Client) SetEntity(keyfile []byte) (vk string, err error) {
 	seqno := cl.GetSeqNo()
-	req := CreateFrame(CmdSetEntity, seqno)
+	req := createFrame(cmdSetEntity, seqno)
 	po := CreateBasePayloadObject(objects.ROEntityWKey, keyfile)
 	req.AddPayloadObject(po)
 	rsp := cl.transact(req)
 	fr, _ := <-rsp
-	err := fr.MustResponse()
+	err = fr.MustResponse()
 	if err != nil {
 		return "", err
 	}
-	vk, _ := fr.GetFirstHeader("vk")
+	vk, _ = fr.GetFirstHeader("vk")
 	return vk, nil
 }
-func (cl *BW2Client) SetEntityOrExit(keyfile []byte) string {
+
+// SetEntityOrExit is the same as SetEntity but will print an error message
+// and exit if the operation fails.
+func (cl *BW2Client) SetEntityOrExit(keyfile []byte) (vk string) {
 	rv, e := cl.SetEntity(keyfile)
 	if e != nil {
 		fmt.Fprintln(os.Stderr, "Could not set entity :", e.Error())
@@ -371,7 +431,9 @@ func (cl *BW2Client) SetEntityOrExit(keyfile []byte) string {
 	return rv
 }
 
-func (cl *BW2Client) SetEntityFileOrExit(filename string) string {
+// SetEntityFileOrExit is the same as SetEntityOrExit but reads the entity
+// contents from the given file
+func (cl *BW2Client) SetEntityFileOrExit(filename string) (vk string) {
 	rv, e := cl.SetEntityFile(filename)
 	if e != nil {
 		fmt.Fprintln(os.Stderr, "Could not set entity file:", e.Error())
@@ -379,7 +441,10 @@ func (cl *BW2Client) SetEntityFileOrExit(filename string) string {
 	}
 	return rv
 }
-func (cl *BW2Client) SetEntityFile(filename string) (string, error) {
+
+// SetEntityFile is the same as SetEntity but reads the entity contents
+// from the given file
+func (cl *BW2Client) SetEntityFile(filename string) (vk string, err error) {
 	contents, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return "", err
@@ -387,9 +452,12 @@ func (cl *BW2Client) SetEntityFile(filename string) (string, error) {
 	return cl.SetEntity(contents[1:])
 }
 
+// BuildChain will ask the local router to find all chains granting permissions
+// to the given VK. It returns a channel that the chains will be written to.
+// This is a poweruser method, consider using BuildAnyChain or simply AutoChain
 func (cl *BW2Client) BuildChain(uri, permissions, to string) (chan *SimpleChain, error) {
 	seqno := cl.GetSeqNo()
-	req := CreateFrame(CmdBuildChain, seqno)
+	req := createFrame(cmdBuildChain, seqno)
 	req.AddHeader("uri", uri)
 	req.AddHeader("to", to)
 	req.AddHeader("accesspermissions", permissions)
@@ -424,6 +492,8 @@ func (cl *BW2Client) BuildChain(uri, permissions, to string) (chan *SimpleChain,
 	return rv, nil
 }
 
+// BuildAnyChainOrExit is like BuildAnyChain but will print an error message and
+// exit the program if the operation fails
 func (cl *BW2Client) BuildAnyChainOrExit(uri, permissions, to string) *SimpleChain {
 	rv, e := cl.BuildAnyChain(uri, permissions, to)
 	if e != nil || rv == nil {
@@ -433,6 +503,8 @@ func (cl *BW2Client) BuildAnyChainOrExit(uri, permissions, to string) *SimpleCha
 	return rv
 }
 
+// BuildAnyChain is a convenience function that calls BuildChain and only returns
+// the first result, or nil if no chains were found
 func (cl *BW2Client) BuildAnyChain(uri, permissions, to string) (*SimpleChain, error) {
 	rc, err := cl.BuildChain(uri, permissions, to)
 	if err != nil {
@@ -449,6 +521,7 @@ func (cl *BW2Client) BuildAnyChain(uri, permissions, to string) (*SimpleChain, e
 	return nil, errors.New("No result")
 }
 
+// QueryOne calls Query but only returns the first result
 func (cl *BW2Client) QueryOne(p *QueryParams) (*SimpleMessage, error) {
 	rvc, err := cl.Query(p)
 	if err != nil {
@@ -464,6 +537,9 @@ func (cl *BW2Client) QueryOne(p *QueryParams) (*SimpleMessage, error) {
 	}()
 	return v, nil
 }
+
+// QueryOrExit is like Query but will print an error message and exit if the
+// operation fails
 func (cl *BW2Client) QueryOrExit(p *QueryParams) chan *SimpleMessage {
 	rv, e := cl.Query(p)
 	if e != nil {
@@ -472,9 +548,15 @@ func (cl *BW2Client) QueryOrExit(p *QueryParams) chan *SimpleMessage {
 	}
 	return rv
 }
+
+// Query will return all persisted messages matching the QueryParams e.g.
+//  client.Query(&bw2bind.QueryParams{
+//		URI : "name.space/my/uri",
+//		AutoChain: true,
+//	})
 func (cl *BW2Client) Query(p *QueryParams) (chan *SimpleMessage, error) {
 	seqno := cl.GetSeqNo()
-	req := CreateFrame(CmdQuery, seqno)
+	req := createFrame(cmdQuery, seqno)
 	if cl.defAutoChain != nil {
 		p.AutoChain = *cl.defAutoChain
 	}
@@ -515,7 +597,11 @@ func (cl *BW2Client) Query(p *QueryParams) (chan *SimpleMessage, error) {
 	go func() {
 		for f := range rsp {
 			sm := SimpleMessage{}
-			sm.From, _ = f.GetFirstHeader("from")
+			var ok bool
+			sm.From, ok = f.GetFirstHeader("from")
+			if !ok {
+				continue
+			}
 			sm.URI, _ = f.GetFirstHeader("uri")
 			sm.ROs = f.GetAllROs()
 			poslice := make([]PayloadObject, f.NumPOs())
@@ -536,9 +622,11 @@ func (cl *BW2Client) Query(p *QueryParams) (chan *SimpleMessage, error) {
 	return rv, nil
 }
 
+// List will list all immediate children of the URI specified in ListParams,
+// as long as one of the URIs under that child has a persisted message
 func (cl *BW2Client) List(p *ListParams) (chan string, error) {
 	seqno := cl.GetSeqNo()
-	req := CreateFrame(CmdQuery, seqno)
+	req := createFrame(cmdQuery, seqno)
 	if cl.defAutoChain != nil {
 		p.AutoChain = *cl.defAutoChain
 	}
@@ -587,34 +675,22 @@ func (cl *BW2Client) List(p *ListParams) (chan string, error) {
 	return rv, nil
 }
 
-func FmtKey(key []byte) string {
+func (cl *BW2Client) GetSeqNo() int {
+	newseqno := atomic.AddUint32(&cl.curseqno, 1)
+	return int(newseqno)
+}
+
+// ToBase64 is a utility function to convert a binary representation of a VK or
+// a hash into the 44-character base64 representation
+func ToBase64(key []byte) string {
 	return base64.URLEncoding.EncodeToString(key)
 }
 
-func UnFmtKey(key string) ([]byte, error) {
+// FromBase64 is a utility function to convert a 44-character representation of
+// a hash or VK into the binary representation. It returns an error if the
+// result is not 32 bytes or the key is not base64
+func FromBase64(key string) ([]byte, error) {
 	rv, err := base64.URLEncoding.DecodeString(key)
-	if len(rv) != 32 {
-		return nil, errors.New("Invalid length")
-	}
-	return rv, err
-}
-
-func FmtSig(sig []byte) string {
-	return base64.URLEncoding.EncodeToString(sig)
-}
-func UnFmtSig(sig string) ([]byte, error) {
-	rv, err := base64.URLEncoding.DecodeString(sig)
-	if len(rv) != 64 {
-		return nil, errors.New("Invalid length")
-	}
-	return rv, err
-}
-
-func FmtHash(hash []byte) string {
-	return base64.URLEncoding.EncodeToString(hash)
-}
-func UnFmtHash(hash string) ([]byte, error) {
-	rv, err := base64.URLEncoding.DecodeString(hash)
 	if len(rv) != 32 {
 		return nil, errors.New("Invalid length")
 	}

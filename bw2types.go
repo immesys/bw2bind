@@ -10,71 +10,158 @@ import (
 	"github.com/immesys/bw2/objects"
 )
 
+// ElaborateDefault is the same as ElaboratePartial
 const ElaborateDefault = ""
+
+// ElaborateFull will copy the entire contents of every DOT in the dot chain
+// into the message. This used to be useful before BW 2.1.x because it guaranteed
+// that the receiver could verify the message. We now always have that guarantee
+// so this is wasteful
 const ElaborateFull = "full"
+
+// ElaboratePartial will include the DOT hashes of all DOTs in the primary access
+// chain in the message. This is required if the DOT chain is not published to
+// the registry. This is the default elaboration option.
 const ElaboratePartial = "partial"
+
+// ElaborateNone only sends the DChain hash in the message. This will only work
+// if the DChain is published to the registry.
 const ElaborateNone = "none"
 
+// PublishParams is used for Publish and Persist messages
 type PublishParams struct {
-	URI                string
+	// The URI you wish to publish to
+	URI string
+	// The PrimaryAccessChain hash, if you are manually specifying the chain.
+	// as of 2.1.x this is not recommended as it will not work unless the chain
+	// is published to the registry
 	PrimaryAccessChain string
-	AutoChain          bool
-	RoutingObjects     []objects.RoutingObject
-	PayloadObjects     []PayloadObject
-	Expiry             *time.Time
-	ExpiryDelta        *time.Duration
-	ElaboratePAC       string
-	DoNotVerify        bool
-	Persist            bool
+	// Tell the local router to build the chain for you, if you always set
+	// this value, consider using BW2Client.OverrideAutoChainTo()
+	AutoChain bool
+	// The routing objects to include in the message, this is not commonly used
+	RoutingObjects []objects.RoutingObject
+	// The payload objects to include in the message.
+	PayloadObjects []PayloadObject
+	// The expiry date of this message. Note that routers will reject messages
+	// that arrive after this time
+	Expiry *time.Time
+	// Same as expiry but expressed from now
+	ExpiryDelta *time.Duration
+	// The PAC elaboration level to use, defaults to ElaboratePartial
+	ElaboratePAC string
+	// By default the local router will verify the message before sending, setting
+	// this to true will disable this stage
+	DoNotVerify bool
+	// Do you want the message to be persist on the designated router
+	Persist bool
 }
 type SubscribeParams struct {
-	URI                string
+	// The URI you wish to subscribe to
+	URI string
+	// The PrimaryAccessChain hash, if you are manually specifying the chain.
+	// as of 2.1.x this is not recommended as it will not work unless the chain
+	// is published to the registry
 	PrimaryAccessChain string
-	AutoChain          bool
-	RoutingObjects     []objects.RoutingObject
-	Expiry             *time.Time
-	ExpiryDelta        *time.Duration
-	ElaboratePAC       string
-	DoNotVerify        bool
-	LeavePacked        bool
+	// Tell the local router to build the chain for you, if you always set
+	// this value, consider using BW2Client.OverrideAutoChainTo()
+	AutoChain bool
+	// The routing objects to include in the message, this is not commonly used
+	RoutingObjects []objects.RoutingObject
+	// The expiry date of this message. Note that routers will reject messages
+	// that arrive after this time. For subscribe this is essentially used
+	// for replay-protection in very corner-case attack vectors
+	Expiry *time.Time
+	// Same as expiry but expressed from now
+	ExpiryDelta *time.Duration
+	// The PAC elaboration level to use, defaults to ElaboratePartial
+	ElaboratePAC string
+	// By default the local router will verify the message before sending, setting
+	// this to true will disable this stage
+	DoNotVerify bool
+	// By default, the local router will take incoming messages and decompose
+	// them into PO's and RO's. If you want the message to remain packed in
+	// signed bosswave format, set this to true
+	LeavePacked bool
 }
 type ListParams struct {
-	URI                string
+	// The URI you wish to list the children of
+	URI string
+	// The PrimaryAccessChain hash, if you are manually specifying the chain.
+	// as of 2.1.x this is not recommended as it will not work unless the chain
+	// is published to the registry
 	PrimaryAccessChain string
-	AutoChain          bool
-	RoutingObjects     []objects.RoutingObject
-	Expiry             *time.Time
-	ExpiryDelta        *time.Duration
-	ElaboratePAC       string
-	DoNotVerify        bool
+	// Tell the local router to build the chain for you, if you always set
+	// this value, consider using BW2Client.OverrideAutoChainTo()
+	AutoChain bool
+	// The routing objects to include in the message, this is not commonly used
+	RoutingObjects []objects.RoutingObject
+	// The expiry date of this message. Note that routers will reject messages
+	// that arrive after this time. For subscribe this is essentially used
+	// for replay-protection in very corner-case attack vectors
+	Expiry *time.Time
+	// Same as expiry but expressed from now
+	ExpiryDelta *time.Duration
+	// The PAC elaboration level to use, defaults to ElaboratePartial
+	ElaboratePAC string
+	// By default the local router will verify the message before sending, setting
+	// this to true will disable this stage
+	DoNotVerify bool
 }
 type QueryParams struct {
-	URI                string
+	// The URI you wish to query
+	URI string
+	// The PrimaryAccessChain hash, if you are manually specifying the chain.
+	// as of 2.1.x this is not recommended as it will not work unless the chain
+	// is published to the registry
 	PrimaryAccessChain string
-	AutoChain          bool
-	RoutingObjects     []objects.RoutingObject
-	Expiry             *time.Time
-	ExpiryDelta        *time.Duration
-	ElaboratePAC       string
-	DoNotVerify        bool
-	LeavePacked        bool
+	// Tell the local router to build the chain for you, if you always set
+	// this value, consider using BW2Client.OverrideAutoChainTo()
+	AutoChain bool
+	// The routing objects to include in the message, this is not commonly used
+	RoutingObjects []objects.RoutingObject
+	// The expiry date of this message. Note that routers will reject messages
+	// that arrive after this time. For subscribe this is essentially used
+	// for replay-protection in very corner-case attack vectors
+	Expiry *time.Time
+	// Same as expiry but expressed from now
+	ExpiryDelta *time.Duration
+	// The PAC elaboration level to use, defaults to ElaboratePartial
+	ElaboratePAC string
+	// By default the local router will verify the message before sending, setting
+	// this to true will disable this stage
+	DoNotVerify bool
+	// By default, the local router will take incoming messages and decompose
+	// them into PO's and RO's. If you want the message to remain packed in
+	// signed bosswave format, set this to true
+	LeavePacked bool
 }
 type CreateDOTParams struct {
-	IsPermission     bool
-	To               string
-	TTL              uint8
-	Expiry           *time.Time
-	ExpiryDelta      *time.Duration
-	Contact          string
-	Comment          string
-	Revokers         []string
+	// Is this a permission DOT (hope not, they are not supported yet)
+	IsPermission bool
+	// The VK to grant the DOT to (from comes from BW2Client.SetEntity)
+	To string
+	// The time to live
+	TTL uint8
+	// The expiry time
+	Expiry *time.Time
+	// Same as Expiry but specified from now
+	ExpiryDelta *time.Duration
+	// The contact information of the DOT, typically "Name Surname <email@address.net>"
+	Contact string
+	// The comment information in the dot
+	Comment string
+	// The entities that are allowed to revoke this DOT
+	Revokers []string
+	// Leave the creation date out of the DOT (this is not normally used)
 	OmitCreationDate bool
 
-	//For Access
-	URI               string
+	// For Access DOTs, the URI to grant on
+	URI string
+	// For Access DOTs, the ADPS permissions e.g LPC*
 	AccessPermissions string
 
-	//For Permissions
+	//For Permissions DOTs, don't use this yet
 	AppPermissions map[string]string
 }
 type CreateDotChainParams struct {
@@ -83,17 +170,21 @@ type CreateDotChainParams struct {
 	UnElaborate  bool
 }
 type CreateEntityParams struct {
-	Expiry           *time.Time
-	ExpiryDelta      *time.Duration
-	Contact          string
-	Comment          string
+	Expiry      *time.Time
+	ExpiryDelta *time.Duration
+	Contact     string
+	Comment     string
+	// The entities that will be allowed to revoke this entity
 	Revokers         []string
 	OmitCreationDate bool
 }
 type BuildChainParams struct {
-	URI         string
+	// The URI you wish to build a chain for
+	URI string
+	// The ADPS permissions you need (e.g. "LPC*")
 	Permissions string
-	To          string
+	// The VK to grant to
+	To string
 }
 type SimpleMessage struct {
 	From     string
@@ -110,15 +201,20 @@ type SimpleChain struct {
 	Content     []byte
 }
 
+// Dump a given message to the console, deconstructing it as much as possible
 func (sm *SimpleMessage) Dump() {
 	fmt.Printf("Message from %s on %s:\n", sm.From, sm.URI)
 	for _, po := range sm.POs {
 		fmt.Println(po.TextRepresentation())
 	}
 }
+
+// PONumDotForm turns an integer Payload Object number into dotted quad form
 func PONumDotForm(ponum int) string {
 	return fmt.Sprintf("%d.%d.%d.%d", ponum>>24, (ponum>>16)&0xFF, (ponum>>8)&0xFF, ponum&0xFF)
 }
+
+// PONumFromDotForm turns a dotted quad form into an integer Payload Object number
 func PONumFromDotForm(dotform string) (int, error) {
 	parts := strings.Split(dotform, ".")
 	if len(parts) != 4 {
@@ -135,6 +231,8 @@ func PONumFromDotForm(dotform string) (int, error) {
 	return rv, nil
 }
 
+// FromDotForm is a shortcut for PONumFromDotForm that panics
+// if there is an error
 func FromDotForm(dotform string) int {
 	rv, err := PONumFromDotForm(dotform)
 	if err != nil {
@@ -143,6 +241,8 @@ func FromDotForm(dotform string) int {
 	return rv
 }
 
+// GetOnePODF -Get a single Payload Object of the given Dot Form
+// returns nil if there are none that match
 func (sm *SimpleMessage) GetOnePODF(df string) PayloadObject {
 	for _, p := range sm.POs {
 		if p.IsTypeDF(df) {

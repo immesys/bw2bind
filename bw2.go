@@ -6,23 +6,26 @@ import (
 	"sync"
 )
 
+// BW2Client is a handle to your local BOSSWAVE router. It is obtained
+// from Connect or ConnectOrExit
 type BW2Client struct {
 	c            net.Conn
 	out          *bufio.Writer
 	in           *bufio.Reader
 	remotever    string
-	seqnos       map[int]chan *Frame
+	seqnos       map[int]chan *frame
 	olock        sync.Mutex
 	curseqno     uint32
 	defAutoChain *bool
+	rHost        string
 }
 
 //Sends a request frame and returns a  chan that contains all the responses.
 //Automatically closes the returned channel when there are no more responses.
-func (cl *BW2Client) transact(req *Frame) chan *Frame {
+func (cl *BW2Client) transact(req *frame) chan *frame {
 	seqno := req.SeqNo
-	inchan := make(chan *Frame, 3)
-	outchan := make(chan *Frame, 3)
+	inchan := make(chan *frame, 3)
+	outchan := make(chan *frame, 3)
 	cl.olock.Lock()
 	cl.seqnos[seqno] = inchan
 	req.WriteToStream(cl.out)

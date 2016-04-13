@@ -10,11 +10,14 @@ import (
 
 	"github.com/immesys/bw2/crypto"
 	"github.com/immesys/bw2/objects"
+	"github.com/mgutz/ansi"
 )
 
+// PublishDOTWithAcc is like PublishDOT but allows you to specify the
+// account you want to bankroll the operation
 func (cl *BW2Client) PublishDOTWithAcc(blob []byte, account int) (string, error) {
 	seqno := cl.GetSeqNo()
-	req := CreateFrame(CmdPutDot, seqno)
+	req := createFrame(cmdPutDot, seqno)
 	//Strip first byte of blob, assuming it came from a file
 	po := CreateBasePayloadObject(PONumROAccessDOT, blob)
 	req.AddPayloadObject(po)
@@ -25,14 +28,17 @@ func (cl *BW2Client) PublishDOTWithAcc(blob []byte, account int) (string, error)
 	}
 	hash, _ := fr.GetFirstHeader("hash")
 	return hash, nil
-
 }
+
+// Publish the given DOT to the registry
 func (cl *BW2Client) PublishDOT(blob []byte) (string, error) {
 	return cl.PublishDOTWithAcc(blob, 0)
 }
+
+// Same as PublishEntity, but specify the account to use
 func (cl *BW2Client) PublishEntityWithAcc(blob []byte, account int) (string, error) {
 	seqno := cl.GetSeqNo()
-	req := CreateFrame(CmdPutEntity, seqno)
+	req := createFrame(cmdPutEntity, seqno)
 	po := CreateBasePayloadObject(PONumROEntity, blob)
 	req.AddPayloadObject(po)
 	req.AddHeader("account", strconv.Itoa(account))
@@ -42,14 +48,40 @@ func (cl *BW2Client) PublishEntityWithAcc(blob []byte, account int) (string, err
 	}
 	vk, _ := fr.GetFirstHeader("vk")
 	return vk, nil
-
 }
+
+// Print a line to stdout that depicts the local router status, typically
+// used at the start of an interactive command
+func (cl *BW2Client) StatLine() {
+	cip, err := cl.GetBCInteractionParams()
+	if err != nil {
+		fmt.Printf("<statline err: %s>\n", err.Error())
+		return
+	}
+	fmt.Printf("%s%s ╔╡%s%s %s\n%s ╚╡peers=%s%d%s block=%s%d%s age=%s%s%s\n",
+		ansi.ColorCode("reset"),
+		ansi.ColorCode("white"),
+		cl.rHost,
+		ansi.ColorCode("green+b"),
+		cl.remotever,
+		ansi.ColorCode("reset")+ansi.ColorCode("white"),
+		ansi.ColorCode("blue+b"),
+		cip.Peers,
+		ansi.ColorCode("reset")+ansi.ColorCode("white"),
+		ansi.ColorCode("blue+b"),
+		cip.CurrentBlock,
+		ansi.ColorCode("reset")+ansi.ColorCode("white"),
+		ansi.ColorCode("blue+b"),
+		cip.CurrentAge.String(),
+		ansi.ColorCode("reset"))
+}
+
 func (cl *BW2Client) PublishEntity(blob []byte) (string, error) {
 	return cl.PublishEntityWithAcc(blob, 0)
 }
 func (cl *BW2Client) PublishChainWithAcc(blob []byte, account int) (string, error) {
 	seqno := cl.GetSeqNo()
-	req := CreateFrame(CmdPutChain, seqno)
+	req := createFrame(cmdPutChain, seqno)
 	//TODO it might not be with a key...
 	po := CreateBasePayloadObject(PONumROAccessDChain, blob)
 	req.AddPayloadObject(po)
@@ -65,9 +97,20 @@ func (cl *BW2Client) PublishChainWithAcc(blob []byte, account int) (string, erro
 func (cl *BW2Client) PublishChain(blob []byte) (string, error) {
 	return cl.PublishChainWithAcc(blob, 0)
 }
+func (cl *BW2Client) UnresolveAlias(blob []byte) (string, error) {
+	seqno := cl.GetSeqNo()
+	req := createFrame(cmdResolveAlias, seqno)
+	req.AddHeaderB("unresolve", blob)
+	fr := <-cl.transact(req)
+	if err := fr.MustResponse(); err != nil {
+		return "", err
+	}
+	v, _ := fr.GetFirstHeader("value")
+	return v, nil
+}
 func (cl *BW2Client) ResolveLongAlias(al string) (data []byte, zero bool, err error) {
 	seqno := cl.GetSeqNo()
-	req := CreateFrame(CmdResolveAlias, seqno)
+	req := createFrame(cmdResolveAlias, seqno)
 	req.AddHeader("longkey", al)
 	fr := <-cl.transact(req)
 	if err := fr.MustResponse(); err != nil {
@@ -78,7 +121,7 @@ func (cl *BW2Client) ResolveLongAlias(al string) (data []byte, zero bool, err er
 }
 func (cl *BW2Client) ResolveShortAlias(al string) (data []byte, zero bool, err error) {
 	seqno := cl.GetSeqNo()
-	req := CreateFrame(CmdResolveAlias, seqno)
+	req := createFrame(cmdResolveAlias, seqno)
 	req.AddHeader("shortkey", al)
 	fr := <-cl.transact(req)
 	if err := fr.MustResponse(); err != nil {
@@ -89,7 +132,7 @@ func (cl *BW2Client) ResolveShortAlias(al string) (data []byte, zero bool, err e
 }
 func (cl *BW2Client) ResolveEmbeddedAlias(al string) (data string, err error) {
 	seqno := cl.GetSeqNo()
-	req := CreateFrame(CmdResolveAlias, seqno)
+	req := createFrame(cmdResolveAlias, seqno)
 	req.AddHeader("longkey", al)
 	fr := <-cl.transact(req)
 	if err := fr.MustResponse(); err != nil {
@@ -126,7 +169,7 @@ func (cl *BW2Client) ValidityToString(i RegistryValidity, err error) string {
 }
 func (cl *BW2Client) ResolveRegistry(key string) (ro objects.RoutingObject, validity RegistryValidity, err error) {
 	seqno := cl.GetSeqNo()
-	req := CreateFrame(CmdResolveRegistryObject, seqno)
+	req := createFrame(cmdResolveRegistryObject, seqno)
 	req.AddHeader("key", key)
 	fr := <-cl.transact(req)
 	if er := fr.MustResponse(); er != nil {
@@ -162,7 +205,7 @@ type BalanceInfo struct {
 
 func (cl *BW2Client) EntityBalances() ([]*BalanceInfo, error) {
 	seqno := cl.GetSeqNo()
-	req := CreateFrame(CmdEntityBalances, seqno)
+	req := createFrame(cmdEntityBalances, seqno)
 	fr := <-cl.transact(req)
 	if er := fr.MustResponse(); er != nil {
 		return nil, er
@@ -191,7 +234,7 @@ func (cl *BW2Client) AddressBalance(addr string) (*BalanceInfo, error) {
 		return nil, fmt.Errorf("Address must be 40 hex characters")
 	}
 	seqno := cl.GetSeqNo()
-	req := CreateFrame(CmdAddressBalance, seqno)
+	req := createFrame(cmdAddressBalance, seqno)
 	req.AddHeader("address", addr)
 	fr := <-cl.transact(req)
 	if er := fr.MustResponse(); er != nil {
@@ -232,7 +275,7 @@ func (cl *BW2Client) GetBCInteractionParams() (*CurrentBCIP, error) {
 }
 func (cl *BW2Client) SetBCInteractionParams(to *BCIP) (*CurrentBCIP, error) {
 	seqno := cl.GetSeqNo()
-	req := CreateFrame(CmdBCInteractionParams, seqno)
+	req := createFrame(cmdBCInteractionParams, seqno)
 	if to != nil {
 		if to.Confirmations != nil {
 			req.AddHeader("confirmations", strconv.FormatInt(*to.Confirmations, 10))
@@ -295,7 +338,7 @@ func CurrencyToWei(v Currency) *big.Int {
 
 func (cl *BW2Client) TransferWei(from int, to string, wei *big.Int) error {
 	seqno := cl.GetSeqNo()
-	req := CreateFrame(CmdTransfer, seqno)
+	req := createFrame(cmdTransfer, seqno)
 	req.AddHeader("account", strconv.Itoa(from))
 	req.AddHeader("address", to)
 	req.AddHeader("valuewei", wei.Text(10))
@@ -309,7 +352,7 @@ func (cl *BW2Client) Transfer(to string, value Currency) error {
 }
 func (cl *BW2Client) NewDesignatedRouterOffer(account int, nsvk string, dr *objects.Entity) error {
 	seqno := cl.GetSeqNo()
-	req := CreateFrame(CmdNewDROffer, seqno)
+	req := createFrame(cmdNewDROffer, seqno)
 	req.AddHeader("account", strconv.Itoa(account))
 	req.AddHeader("nsvk", nsvk)
 	if dr != nil {
@@ -321,7 +364,7 @@ func (cl *BW2Client) NewDesignatedRouterOffer(account int, nsvk string, dr *obje
 
 func (cl *BW2Client) GetDesignatedRouterOffers(nsvk string) (active string, activesrv string, drvks []string, err error) {
 	seqno := cl.GetSeqNo()
-	req := CreateFrame(CmdListDROffers, seqno)
+	req := createFrame(cmdListDROffers, seqno)
 	req.AddHeader("nsvk", nsvk)
 	fr := <-cl.transact(req)
 	if err := fr.MustResponse(); err != nil {
@@ -339,7 +382,7 @@ func (cl *BW2Client) GetDesignatedRouterOffers(nsvk string) (active string, acti
 }
 func (cl *BW2Client) AcceptDesignatedRouterOffer(account int, drvk string, ns *objects.Entity) error {
 	seqno := cl.GetSeqNo()
-	req := CreateFrame(CmdAcceptDROffer, seqno)
+	req := createFrame(cmdAcceptDROffer, seqno)
 	req.AddHeader("account", strconv.Itoa(account))
 	req.AddHeader("drvk", drvk)
 	if ns != nil {
@@ -350,7 +393,7 @@ func (cl *BW2Client) AcceptDesignatedRouterOffer(account int, drvk string, ns *o
 }
 func (cl *BW2Client) SetDesignatedRouterSRVRecord(account int, srv string, dr *objects.Entity) error {
 	seqno := cl.GetSeqNo()
-	req := CreateFrame(CmdUpdateSRVRecord, seqno)
+	req := createFrame(cmdUpdateSRVRecord, seqno)
 	req.AddHeader("account", strconv.Itoa(account))
 	req.AddHeader("srv", srv)
 	if dr != nil {
@@ -364,7 +407,7 @@ func (cl *BW2Client) CreateLongAlias(account int, key []byte, val []byte) error 
 		return fmt.Errorf("Key and value must be shorter than 32 bytes")
 	}
 	seqno := cl.GetSeqNo()
-	req := CreateFrame(CmdMakeLongAlias, seqno)
+	req := createFrame(cmdMakeLongAlias, seqno)
 	req.AddHeader("account", strconv.Itoa(account))
 	req.AddHeaderB("content", val)
 	req.AddHeaderB("key", key)
