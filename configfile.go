@@ -5,6 +5,8 @@ import (
 	"text/template"
 )
 
+// LoadConfigFile allows you to preprocess an augmented
+// file into processed form. This is not normally used.
 func LoadConfigFile(contents string) ([]byte, error) {
 	tmp := template.New("root")
 	buf := &bytes.Buffer{}

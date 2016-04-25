@@ -12,79 +12,93 @@ import (
 )
 
 const (
-	CmdHello        = "helo"
-	CmdPublish      = "publ"
-	CmdSubscribe    = "subs"
-	CmdPersist      = "pers"
-	CmdList         = "list"
-	CmdQuery        = "quer"
-	CmdTapSubscribe = "tsub"
-	CmdTapQuery     = "tque"
-	CmdPutDot       = "putd"
-	CmdPutEntity    = "pute"
-	CmdPutChain     = "putc"
-	CmdMakeDot      = "makd"
-	CmdMakeEntity   = "make"
-	CmdMakeChain    = "makc"
-	CmdBuildChain   = "bldc"
-	CmdAddPrefDot   = "adpd"
-	CmdAddPrefChain = "adpc"
-	CmdDelPrefDot   = "dlpd"
-	CmdDelPrefChain = "dlpc"
-	CmdSetEntity    = "sete"
+	cmdHello        = "helo"
+	cmdPublish      = "publ"
+	cmdSubscribe    = "subs"
+	cmdPersist      = "pers"
+	cmdList         = "list"
+	cmdQuery        = "quer"
+	cmdTapSubscribe = "tsub"
+	cmdTapQuery     = "tque"
+	cmdMakeDot      = "makd"
+	cmdMakeEntity   = "make"
+	cmdMakeChain    = "makc"
+	cmdBuildChain   = "bldc"
+	cmdAddPrefDot   = "adpd"
+	cmdAddPrefChain = "adpc"
+	cmdDelPrefDot   = "dlpd"
+	cmdDelPrefChain = "dlpc"
+	cmdSetEntity    = "sete"
 
-	CmdResponse = "resp"
-	CmdResult   = "rslt"
+	//New for 2.1.x
+	cmdPutDot                = "putd"
+	cmdPutEntity             = "pute"
+	cmdPutChain              = "putc"
+	cmdEntityBalances        = "ebal"
+	cmdAddressBalance        = "abal"
+	cmdBCInteractionParams   = "bcip"
+	cmdTransfer              = "xfer"
+	cmdMakeShortAlias        = "mksa"
+	cmdMakeLongAlias         = "mkla"
+	cmdResolveAlias          = "resa"
+	cmdNewDROffer            = "ndro"
+	cmdAcceptDROffer         = "adro"
+	cmdResolveRegistryObject = "rsro"
+	cmdUpdateSRVRecord       = "usrv"
+	cmdListDROffers          = "ldro"
+
+	cmdResponse = "resp"
+	cmdResult   = "rslt"
 )
 
-type Header struct {
+type header struct {
 	Content []byte
 	Key     string
 	Length  string
 	ILength int
 }
-type ROEntry struct {
+type roEntry struct {
 	RO     objects.RoutingObject
 	RONum  string
 	Length string
 }
-type POEntry struct {
+type poEntry struct {
 	PO           []byte
 	PONum        int
 	StrPONum     string
 	StrLen       string
 	StrPODotForm string
 }
-type Frame struct {
+type frame struct {
 	SeqNo   int
-	Headers []Header
+	Headers []header
 	Cmd     string
-	ROs     []ROEntry
-	POs     []POEntry
+	ROs     []roEntry
+	POs     []poEntry
 	Length  int
 }
 
-func CreateFrame(cmd string, seqno int) *Frame {
-	return &Frame{Cmd: cmd,
+func createFrame(cmd string, seqno int) *frame {
+	return &frame{Cmd: cmd,
 		SeqNo:   seqno,
-		Headers: make([]Header, 0),
-		POs:     make([]POEntry, 0),
-		ROs:     make([]ROEntry, 0),
+		Headers: make([]header, 0),
+		POs:     make([]poEntry, 0),
+		ROs:     make([]roEntry, 0),
 		Length:  4, //"end\n"
 	}
 }
-func (f *Frame) AddHeaderB(k string, v []byte) {
-	h := Header{Key: k, Content: v, Length: strconv.Itoa(len(v))}
+func (f *frame) AddHeaderB(k string, v []byte) {
+	h := header{Key: k, Content: v, Length: strconv.Itoa(len(v))}
 	f.Headers = append(f.Headers, h)
 	//6 = 3 for "kv " 1 for space, 1 for newline before content and 1 for newline after
 	f.Length += len(k) + len(h.Length) + 6 + len(v)
 }
-func (f *Frame) AddHeader(k string, v string) {
+func (f *frame) AddHeader(k string, v string) {
 	f.AddHeaderB(k, []byte(v))
 }
 
 /*
-func (f *Frame) GetAllPOs() []PayloadObject {
+func (f *frame) GetAllPOs() []PayloadObject {
 	rv := make([]PayloadObject, len(f.POs))
 	for i, v := range f.POs {
 		po := LoadPayloadObject(v.PONum, v.PO)
@@ -92,20 +106,20 @@ func (f *Frame) GetAllPOs() []PayloadObject {
 	}
 	return rv
 }*/
-func (f *Frame) NumPOs() int {
+func (f *frame) NumPOs() int {
 	return len(f.POs)
 }
-func (f *Frame) GetPO(num int) (PayloadObject, error) {
+func (f *frame) GetPO(num int) (PayloadObject, error) {
 	return LoadPayloadObject(f.POs[num].PONum, f.POs[num].PO)
 }
-func (f *Frame) GetAllROs() []objects.RoutingObject {
+func (f *frame) GetAllROs() []objects.RoutingObject {
 	rv := make([]objects.RoutingObject, len(f.ROs))
 	for i, v := range f.ROs {
 		rv[i] = v.RO
 	}
 	return rv
 }
-func (f *Frame) GetFirstHeaderB(k string) ([]byte, bool) {
+func (f *frame) GetFirstHeaderB(k string) ([]byte, bool) {
 	for _, h := range f.Headers {
 		if h.Key == k {
 			return h.Content, true
@@ -113,11 +127,11 @@ func (f *Frame) GetFirstHeaderB(k string) ([]byte, bool) {
 	}
 	return nil, false
 }
-func (f *Frame) GetFirstHeader(k string) (string, bool) {
+func (f *frame) GetFirstHeader(k string) (string, bool) {
 	r, ok := f.GetFirstHeaderB(k)
 	return string(r), ok
 }
-func (f *Frame) GetAllHeaders(k string) []string {
+func (f *frame) GetAllHeaders(k string) []string {
 	var rv []string
 	for _, h := range f.Headers {
 		if h.Key == k {
@@ -126,7 +140,7 @@ func (f *Frame) GetAllHeaders(k string) []string {
 	}
 	return rv
 }
-func (f *Frame) GetAllHeadersB(k string) [][]byte {
+func (f *frame) GetAllHeadersB(k string) [][]byte {
 	var rv [][]byte
 	for _, h := range f.Headers {
 		if h.Key == k {
@@ -135,8 +149,8 @@ func (f *Frame) GetAllHeadersB(k string) [][]byte {
 	}
 	return rv
 }
-func (f *Frame) AddRoutingObject(ro objects.RoutingObject) {
-	re := ROEntry{
+func (f *frame) AddRoutingObject(ro objects.RoutingObject) {
+	re := roEntry{
 		RO:     ro,
 		RONum:  strconv.Itoa(ro.GetRONum()),
 		Length: strconv.Itoa(len(ro.GetContent())),
@@ -145,8 +159,8 @@ func (f *Frame) AddRoutingObject(ro objects.RoutingObject) {
 	//3 for "ro ", 2 for newlines before and after 1 for space
 	f.Length += 3 + len(re.RONum) + 1 + len(re.Length) + 1 + len(ro.GetContent()) + 1
 }
-func (f *Frame) AddPayloadObject(po PayloadObject) {
-	pe := POEntry{
+func (f *frame) AddPayloadObject(po PayloadObject) {
+	pe := poEntry{
 		PO:           po.GetContents(),
 		PONum:        po.GetPONum(),
 		StrPONum:     strconv.Itoa(po.GetPONum()),
@@ -157,8 +171,36 @@ func (f *Frame) AddPayloadObject(po PayloadObject) {
 	//3 for "po ",                  colon                space                newline                   newline
 	f.Length += 3 + len(pe.StrPONum) + 1 + len(pe.StrPODotForm) + 1 + len(pe.StrLen) + 1 + len(po.GetContents()) + 1
 }
-
-func (f *Frame) WriteToStream(s *bufio.Writer) {
+func (f *frame) MustResponse() error {
+	response, err := f.IsResponse()
+	if !response {
+		msg := ""
+		if err != nil {
+			msg = err.Error()
+		}
+		return fmt.Errorf("Expecting RESP frame %s\n", msg)
+	}
+	return err
+}
+func (f *frame) IsResponse() (bool, error) {
+	if f == nil {
+		return true, fmt.Errorf("channel closed early")
+	}
+	if f.Cmd == cmdResponse {
+		st, stok := f.GetFirstHeader("status")
+		if !stok {
+			panic("Should not hit this")
+		}
+		if st == "okay" {
+			return true, nil
+		}
+		code, _ := f.GetFirstHeader("code")
+		msg, _ := f.GetFirstHeader("reason")
+		return true, fmt.Errorf("[%s] %s", code, msg)
+	}
+	return false, nil
+}
+func (f *frame) WriteToStream(s *bufio.Writer) {
 	s.WriteString(fmt.Sprintf("%4s %010d %010d\n", f.Cmd, f.Length, f.SeqNo))
 	for _, v := range f.Headers {
 		s.WriteString(fmt.Sprintf("kv %s %s\n", v.Key, v.Length))
@@ -181,7 +223,7 @@ func (f *Frame) WriteToStream(s *bufio.Writer) {
 	s.Flush()
 }
 
-func LoadFrameFromStream(s *bufio.Reader) (f *Frame, e error) {
+func loadFrameFromStream(s *bufio.Reader) (f *frame, e error) {
 	defer func() {
 		if r := recover(); r != nil {
 			f = nil
@@ -197,7 +239,7 @@ func LoadFrameFromStream(s *bufio.Reader) (f *Frame, e error) {
 	//Remember header is
 	//    4          15         26
 	//CMMD 10DIGITLEN 10DIGITSEQ\n
-	f = &Frame{}
+	f = &frame{}
 	f.Cmd = string(hdr[0:4])
 	cx, err := strconv.ParseUint(string(hdr[5:15]), 10, 32)
 	if err != nil {
@@ -225,7 +267,7 @@ func LoadFrameFromStream(s *bufio.Reader) (f *Frame, e error) {
 		tok[2] = tok[2][:len(tok[2])-1]
 		switch tok[0] {
 		case "kv":
-			h := Header{}
+			h := header{}
 			h.Key = tok[1]
 			cx, err := strconv.ParseUint(tok[2], 10, 32)
 			if err != nil {
@@ -265,7 +307,7 @@ func LoadFrameFromStream(s *bufio.Reader) (f *Frame, e error) {
 			if err != nil {
 				return nil, e
 			}
-			f.ROs = append(f.ROs, ROEntry{ro, strconv.Itoa(ronum), strconv.Itoa(length)})
+			f.ROs = append(f.ROs, roEntry{ro, strconv.Itoa(ronum), strconv.Itoa(length)})
 		case "po":
 			ponums := strings.Split(tok[1], ":")
 			var ponum int
@@ -295,7 +337,7 @@ func LoadFrameFromStream(s *bufio.Reader) (f *Frame, e error) {
 			if _, e := s.ReadByte(); e != nil {
 				return nil, e
 			}
-			poe := POEntry{
+			poe := poEntry{
 				PO:    body,
 				PONum: ponum,
 			}
