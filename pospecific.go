@@ -40,7 +40,7 @@ func CreateMetadataPayloadObject(tup *MetadataTuple) *MetadataPayloadObjectImpl 
 }
 func (po *MetadataPayloadObjectImpl) TextRepresentation() string {
 	return fmt.Sprintf("PO %s len %d (metadata) @%s:\n%s\n", PONumDotForm(po.ponum),
-		len(po.contents), time.Unix(0, po.Value().Timestamp*1000), po.Value().Value)
+		len(po.contents), time.Unix(0, po.Value().Timestamp), po.Value().Value)
 }
 func (po *MetadataPayloadObjectImpl) Value() *MetadataTuple {
 	mt := MetadataTuple{}

@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/immesys/bw2/crypto"
@@ -48,6 +49,141 @@ func (cl *BW2Client) PublishEntityWithAcc(blob []byte, account int) (string, err
 	}
 	vk, _ := fr.GetFirstHeader("vk")
 	return vk, nil
+}
+
+func (cl *BW2Client) SetMetadata(uri, key, val string) error {
+	po := CreateMetadataPayloadObject(&MetadataTuple{
+		Value:     val,
+		Timestamp: time.Now().UnixNano(),
+	})
+	if !strings.HasSuffix(uri, "/") {
+		uri += "/"
+	}
+	uri += "!meta/" + key
+	return cl.Publish(&PublishParams{
+		AutoChain:      true,
+		PayloadObjects: []PayloadObject{po},
+		URI:            uri,
+	})
+}
+
+func (cl *BW2Client) DelMetadata(uri, key string) error {
+	if !strings.HasSuffix(uri, "/") {
+		uri += "/"
+	}
+	uri += "!meta/" + key
+	return cl.Publish(&PublishParams{
+		AutoChain:      true,
+		PayloadObjects: []PayloadObject{},
+		URI:            uri,
+	})
+}
+
+func (cl *BW2Client) GetMetadata(uri string) (data map[string]*MetadataTuple,
+	from map[string]string,
+	err error) {
+	type de struct {
+		K string
+		M *MetadataTuple
+		O string
+	}
+	parts := strings.Split(uri, "/")
+	chans := make([]chan de, len(parts))
+	for i := 0; i < len(parts); i++ {
+		chans[i] = make(chan de, 10)
+	}
+	var ge error
+	for i := 0; i < len(parts); i++ {
+		li := i
+		go func() {
+			turi := strings.Join(parts[:li+1], "/")
+			smc, err := cl.Query(&QueryParams{
+				AutoChain: true,
+				URI:       turi + "/!meta/+",
+			})
+			if err != nil {
+				ge = err
+				close(chans[li])
+				return
+			}
+			for sm := range smc {
+				uriparts := strings.Split(sm.URI, "/")
+				meta, ok := sm.GetOnePODF(PODFSMetadata).(MetadataPayloadObject)
+				if ok {
+					chans[li] <- de{uriparts[len(uriparts)-1], meta.Value(), turi}
+				}
+			}
+			close(chans[li])
+		}()
+	}
+
+	//		key -> de
+	rvO := make(map[string]string)
+	rvM := make(map[string]*MetadataTuple)
+
+	//otherwise, iterate in forward order to prefer more specified metadata
+	for i := 0; i < len(parts); i++ {
+		for res := range chans[i] {
+			rvO[res.K] = res.O
+			rvM[res.K] = res.M
+		}
+	}
+
+	//check error
+	if ge != nil {
+		return nil, nil, ge
+	}
+	return rvM, rvO, nil
+}
+func (cl *BW2Client) GetMetadataKey(uri, key string) (*MetadataTuple, error) {
+	parts := strings.Split(uri, "/")
+	chans := make([]chan *MetadataTuple, len(parts))
+	for i := 0; i < len(parts); i++ {
+		chans[i] = make(chan *MetadataTuple, 1)
+	}
+	var ge error
+	wg := sync.WaitGroup{}
+	wg.Add(len(parts))
+	for i := 0; i < len(parts); i++ {
+		li := i
+		go func() {
+			turi := strings.Join(parts[:li+1], "/") + "/!meta/" + key
+			sm, err := cl.QueryOne(&QueryParams{
+				AutoChain: true,
+				URI:       turi,
+			})
+			if err != nil {
+				ge = err
+				wg.Done()
+				return
+			}
+			if sm == nil {
+				chans[li] <- nil
+			} else {
+				meta, ok := sm.GetOnePODF(PODFSMetadata).(MetadataPayloadObject)
+				if ok {
+					chans[li] <- meta.Value()
+				} else {
+					chans[li] <- nil
+				}
+			}
+			wg.Done()
+		}()
+	}
+	//wait for queries to finish
+	wg.Wait()
+	//check error
+	if ge != nil {
+		return nil, ge
+	}
+	//otherwise, iterate in reverse order to prefer more specified metadata
+	for i := len(parts) - 1; i >= 0; i-- {
+		v := <-chans[i]
+		if v != nil {
+			return v, nil
+		}
+	}
+	return nil, nil
 }
 
 // Print a line to stdout that depicts the local router status, typically

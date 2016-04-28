@@ -41,6 +41,23 @@ func (v *View) Meta(uri, key string) (*bw2bind.MetadataTuple, bool) {
 	return val, set
 }
 
+func (v *View) AllMeta(uri string) map[string]*bw2bind.MetadataTuple {
+	parts := strings.Split(uri, "/")
+	rv := make(map[string]*bw2bind.MetadataTuple)
+	v.msmu.Lock()
+	for i := 1; i <= len(parts); i++ {
+		uri := strings.Join(parts[:i], "/")
+		m1, ok := v.metastore[uri]
+		if ok {
+			for kk, vv := range m1 {
+				rv[kk] = vv
+			}
+		}
+	}
+	v.msmu.Unlock()
+	return rv
+}
+
 type Expression interface {
 	//Given a complete resource name, does this expression
 	//permit it to be included in the view
@@ -357,6 +374,50 @@ func (v *View) initMetaView() {
 		}
 	}()
 }
+func (v *View) PubSlot(iface, slot string, poz []bw2bind.PayloadObject) error {
+	idz := v.Interfaces()
+	for _, viewiface := range idz {
+		if viewiface.Interface == iface {
+			err := v.cl.Publish(&bw2bind.PublishParams{
+				AutoChain:      true,
+				PayloadObjects: poz,
+				URI:            viewiface.URI + "/slot/" + slot,
+			})
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+func (v *View) SubSignal(iface, signal string) (chan *bw2bind.SimpleMessage, error) {
+	idz := v.Interfaces()
+	rv := make(chan *bw2bind.SimpleMessage, 10)
+	wg := sync.WaitGroup{}
+	for _, viewiface := range idz {
+		if viewiface.Interface == iface {
+			rvc, err := v.cl.Subscribe(&bw2bind.SubscribeParams{
+				AutoChain: true,
+				URI:       viewiface.URI + "/signal/" + signal,
+			})
+			if err != nil {
+				return nil, err
+			}
+			wg.Add(1)
+			go func() {
+				for sm := range rvc {
+					rv <- sm
+				}
+				wg.Done()
+			}()
+		}
+	}
+	go func() {
+		wg.Wait()
+		close(rv)
+	}()
+	return rv, nil
+}
 func (v *View) Interfaces() []InterfaceDescription {
 	v.msmu.Lock()
 	found := make(map[string]InterfaceDescription)
@@ -389,6 +450,7 @@ type InterfaceDescription struct {
 	Service   string
 	Namespace string
 	Prefix    string
+	Metadata  map[string]*bw2bind.MetadataTuple
 }
 
 /*
