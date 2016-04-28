@@ -18,7 +18,9 @@ type POConstructor struct {
 	Constructor func(int, []byte) (PayloadObject, error)
 }
 
+//Most specialised must be first
 var PayloadObjectConstructors = []POConstructor{
+	{"2.0.3.1", 32, LoadMetadataPayloadObjectPO},
 	{"67.0.0.0", 8, LoadYAMLPayloadObjectPO},
 	{"2.0.0.0", 8, LoadMsgPackPayloadObjectPO},
 	{"64.0.0.0", 4, LoadTextPayloadObjectPO},

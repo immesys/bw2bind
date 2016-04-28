@@ -442,6 +442,18 @@ func (cl *BW2Client) SetEntityFileOrExit(filename string) (vk string) {
 	return rv
 }
 
+// SetEntityFromEnvironOrExit is the same as SetEntityFileOrExit
+// but loads the file name from the BW2_DEFAULT_ENTITY environment
+// variable
+func (cl *BW2Client) SetEntityFromEnvironOrExit() (vk string) {
+	fname := os.Getenv("BW2_DEFAULT_ENTITY")
+	if fname == "" {
+		fmt.Fprintln(os.Stderr, "$BW2_DEFAULT_ENTITY not set")
+		os.Exit(1)
+	}
+	return cl.SetEntityFileOrExit(fname)
+}
+
 // SetEntityFile is the same as SetEntity but reads the entity contents
 // from the given file
 func (cl *BW2Client) SetEntityFile(filename string) (vk string, err error) {
