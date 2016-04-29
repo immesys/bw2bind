@@ -3,6 +3,7 @@ package view
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 
@@ -15,9 +16,10 @@ type View struct {
 	ex        Expression
 	metastore map[string]map[string]*bw2bind.MetadataTuple
 	ns        []string
-	msmu      sync.Mutex
+	msmu      sync.RWMutex
 	mscond    *sync.Cond
 	msloaded  bool
+	changecb  []func()
 }
 
 func (v *View) Meta(uri, key string) (*bw2bind.MetadataTuple, bool) {
@@ -25,7 +27,7 @@ func (v *View) Meta(uri, key string) (*bw2bind.MetadataTuple, bool) {
 	parts := strings.Split(uri, "/")
 	var val *bw2bind.MetadataTuple = nil
 	set := false
-	v.msmu.Lock()
+	v.msmu.RLock()
 	for i := 1; i <= len(parts); i++ {
 		uri := strings.Join(parts[:i], "/")
 		m1, ok := v.metastore[uri]
@@ -37,14 +39,14 @@ func (v *View) Meta(uri, key string) (*bw2bind.MetadataTuple, bool) {
 			}
 		}
 	}
-	v.msmu.Unlock()
+	v.msmu.RUnlock()
 	return val, set
 }
 
 func (v *View) AllMeta(uri string) map[string]*bw2bind.MetadataTuple {
 	parts := strings.Split(uri, "/")
 	rv := make(map[string]*bw2bind.MetadataTuple)
-	v.msmu.Lock()
+	v.msmu.RLock()
 	for i := 1; i <= len(parts); i++ {
 		uri := strings.Join(parts[:i], "/")
 		m1, ok := v.metastore[uri]
@@ -54,7 +56,7 @@ func (v *View) AllMeta(uri string) map[string]*bw2bind.MetadataTuple {
 			}
 		}
 	}
-	v.msmu.Unlock()
+	v.msmu.RUnlock()
 	return rv
 }
 
@@ -193,6 +195,7 @@ func (e *metaEqExpression) Matches(uri string, v *View) bool {
 	if e.regex {
 		panic("have not done regex yet")
 	} else {
+		fmt.Println("returning meta match: ", val.Value == e.val)
 		return val.Value == e.val
 	}
 }
@@ -210,8 +213,11 @@ type uriEqExpression struct {
 }
 
 func (e *uriEqExpression) Matches(uri string, v *View) bool {
-	//TODO
-	return false
+	if e.regex {
+		return regexp.MustCompile(e.pattern).MatchString(uri)
+	} else {
+		panic("have not done thing yet")
+	}
 }
 func (e *uriEqExpression) MightMatch(uri string, v *View) bool {
 	if e.regex {
@@ -287,7 +293,7 @@ func Service(name string) Expression {
 	return MatchURI(fmt.Sprintf("/*/%s/+/+/+/+", name))
 }
 func Interface(name string) Expression {
-	return MatchURI(fmt.Sprintf("/*/%s/+/+", name))
+	return RegexURI("^.*/" + name + "$")
 }
 func NewView(cl *bw2bind.BW2Client, namespaces []string, exz ...Expression) *View {
 	ex := And(exz...)
@@ -318,9 +324,17 @@ func (v *View) waitForMetaView() {
 	}
 	v.msmu.Unlock()
 }
+func (v *View) fireChange() {
+	v.msmu.RLock()
+	for _, cb := range v.changecb {
+		go cb()
+	}
+	v.msmu.RUnlock()
+}
 func (v *View) initMetaView() {
 	v.mscond = sync.NewCond(&v.msmu)
 	procChange := func(sm *bw2bind.SimpleMessage) {
+		fmt.Println("doing procchange")
 		groups := regexp.MustCompile("^(.*)/!meta/([^/]*)$").FindStringSubmatch(sm.URI)
 		if groups == nil {
 			panic("bad re match")
@@ -333,14 +347,21 @@ func (v *View) initMetaView() {
 			map1 = make(map[string]*bw2bind.MetadataTuple)
 			v.metastore[uri] = map1
 		}
-		po := sm.GetOnePODF(bw2bind.PODFSMetadata).(bw2bind.MetadataPayloadObject)
-		map1[key] = po.Value()
+		poi := sm.GetOnePODF(bw2bind.PODFSMetadata)
+		if poi != nil {
+			po := poi.(bw2bind.MetadataPayloadObject)
+			map1[key] = po.Value()
+		} else {
+			delete(map1, key)
+		}
 		v.msmu.Unlock()
+		v.fireChange()
 	}
 	go func() {
 		//First subscribe and wait for that to finish
 		rcz := make([]chan *bw2bind.SimpleMessage, len(v.ns))
 		for i, n := range v.ns {
+			fmt.Println("sub is on", n+"/*/!meta/+")
 			rcz[i] = v.cl.SubscribeOrExit(&bw2bind.SubscribeParams{
 				URI:       n + "/*/!meta/+",
 				AutoChain: true,
@@ -367,17 +388,23 @@ func (v *View) initMetaView() {
 		//And process our subscriptions
 		for _, rch := range rcz {
 			go func(r chan *bw2bind.SimpleMessage) {
+				fmt.Println("starting listening on sub")
 				for m := range r {
+					fmt.Println("got a message")
 					procChange(m)
 				}
+				fmt.Println("sub aborted")
 			}(rch)
 		}
 	}()
 }
 func (v *View) PubSlot(iface, slot string, poz []bw2bind.PayloadObject) error {
 	idz := v.Interfaces()
+	fmt.Println("we found ", len(idz), "interfaces")
+	fmt.Println(idz)
 	for _, viewiface := range idz {
 		if viewiface.Interface == iface {
+			fmt.Println("doing the actual publish")
 			err := v.cl.Publish(&bw2bind.PublishParams{
 				AutoChain:      true,
 				PayloadObjects: poz,
@@ -386,6 +413,8 @@ func (v *View) PubSlot(iface, slot string, poz []bw2bind.PayloadObject) error {
 			if err != nil {
 				return err
 			}
+		} else {
+			fmt.Println("iface mismatch", viewiface.Interface, iface)
 		}
 	}
 	return nil
@@ -419,29 +448,59 @@ func (v *View) SubSignal(iface, signal string) (chan *bw2bind.SimpleMessage, err
 	return rv, nil
 }
 func (v *View) Interfaces() []InterfaceDescription {
-	v.msmu.Lock()
+	v.msmu.RLock()
 	found := make(map[string]InterfaceDescription)
 	for uri, _ := range v.metastore {
+		fmt.Println("checking ", uri)
 		if v.ex.Matches(uri, v) {
-			groups := regexp.MustCompile("^(([^/]+)/(.*)/(s\\.[^/]+)/+)/(i\\.[^/]+)).*$").FindStringSubmatch(uri)
+			fmt.Println("passed first check")
+			pat := `^(([^/]+)(/.*)?/(s\.[^/]+)/([^/]+)/(i\.[^/]+)).*$`
+			//"^((([^/]+)/(.*)/(s\\.[^/]+)/+)/(i\\.[^/]+)).*$"
+			groups := regexp.MustCompile(pat).FindStringSubmatch(uri)
 			if groups != nil {
 				id := InterfaceDescription{
 					URI:       groups[1],
-					Interface: groups[5],
+					Interface: groups[6],
 					Service:   groups[4],
 					Namespace: groups[2],
-					Prefix:    groups[3],
+					Prefix:    groups[5],
+					v:         v,
 				}
+				id.Suffix = strings.TrimPrefix(id.URI, id.Namespace+"/")
 				fmt.Println("id was", id)
 				found[id.URI] = id
 			}
 		}
 	}
+	v.msmu.RUnlock()
 	rv := []InterfaceDescription{}
-	for _, v := range found {
-		rv = append(rv, v)
+	for _, vv := range found {
+		if vv.Meta("lastalive") != "" {
+			rv = append(rv, vv)
+		} else {
+			fmt.Println("interface is not alive")
+		}
 	}
+	sort.Sort(interfaceSorter(rv))
 	return rv
+}
+
+type interfaceSorter []InterfaceDescription
+
+func (is interfaceSorter) Swap(i, j int) {
+	is[i], is[j] = is[j], is[i]
+}
+func (is interfaceSorter) Less(i, j int) bool {
+	return strings.Compare(is[i].URI, is[j].URI) < 0
+}
+func (is interfaceSorter) Len() int {
+	return len(is)
+}
+func (v *View) OnChange(f func()) {
+	//TODO determien if change is actually relevant
+	v.msmu.Lock()
+	v.changecb = append(v.changecb, f)
+	v.msmu.Unlock()
 }
 
 type InterfaceDescription struct {
@@ -450,7 +509,16 @@ type InterfaceDescription struct {
 	Service   string
 	Namespace string
 	Prefix    string
-	Metadata  map[string]*bw2bind.MetadataTuple
+	Suffix    string
+	v         *View
+}
+
+func (id *InterfaceDescription) Meta(key string) string {
+	mdat, ok := id.v.Meta(id.URI, key)
+	if !ok {
+		return "<unset>"
+	}
+	return mdat.Value
 }
 
 /*

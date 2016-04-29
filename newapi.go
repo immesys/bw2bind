@@ -56,32 +56,31 @@ func (cl *BW2Client) SetMetadata(uri, key, val string) error {
 		Value:     val,
 		Timestamp: time.Now().UnixNano(),
 	})
-	if !strings.HasSuffix(uri, "/") {
-		uri += "/"
-	}
-	uri += "!meta/" + key
+	uri = strings.TrimSuffix(uri, "/")
+	uri += "/!meta/" + key
 	return cl.Publish(&PublishParams{
 		AutoChain:      true,
 		PayloadObjects: []PayloadObject{po},
 		URI:            uri,
+		Persist:        true,
 	})
 }
 
 func (cl *BW2Client) DelMetadata(uri, key string) error {
-	if !strings.HasSuffix(uri, "/") {
-		uri += "/"
-	}
-	uri += "!meta/" + key
+	uri = strings.TrimSuffix(uri, "/")
+	uri += "/!meta/" + key
 	return cl.Publish(&PublishParams{
 		AutoChain:      true,
 		PayloadObjects: []PayloadObject{},
 		URI:            uri,
+		Persist:        true,
 	})
 }
 
 func (cl *BW2Client) GetMetadata(uri string) (data map[string]*MetadataTuple,
 	from map[string]string,
 	err error) {
+	uri = strings.TrimSuffix(uri, "/")
 	type de struct {
 		K string
 		M *MetadataTuple
@@ -135,11 +134,17 @@ func (cl *BW2Client) GetMetadata(uri string) (data map[string]*MetadataTuple,
 	}
 	return rvM, rvO, nil
 }
-func (cl *BW2Client) GetMetadataKey(uri, key string) (*MetadataTuple, error) {
+func (cl *BW2Client) GetMetadataKey(uri, key string) (v *MetadataTuple, from string, err error) {
+	uri = strings.TrimSuffix(uri, "/")
 	parts := strings.Split(uri, "/")
-	chans := make([]chan *MetadataTuple, len(parts))
+	type de struct {
+		K string
+		M *MetadataTuple
+		O string
+	}
+	chans := make([]chan *de, len(parts))
 	for i := 0; i < len(parts); i++ {
-		chans[i] = make(chan *MetadataTuple, 1)
+		chans[i] = make(chan *de, 1)
 	}
 	var ge error
 	wg := sync.WaitGroup{}
@@ -147,10 +152,10 @@ func (cl *BW2Client) GetMetadataKey(uri, key string) (*MetadataTuple, error) {
 	for i := 0; i < len(parts); i++ {
 		li := i
 		go func() {
-			turi := strings.Join(parts[:li+1], "/") + "/!meta/" + key
+			turi := strings.Join(parts[:li+1], "/")
 			sm, err := cl.QueryOne(&QueryParams{
 				AutoChain: true,
-				URI:       turi,
+				URI:       turi + "/!meta/" + key,
 			})
 			if err != nil {
 				ge = err
@@ -162,7 +167,7 @@ func (cl *BW2Client) GetMetadataKey(uri, key string) (*MetadataTuple, error) {
 			} else {
 				meta, ok := sm.GetOnePODF(PODFSMetadata).(MetadataPayloadObject)
 				if ok {
-					chans[li] <- meta.Value()
+					chans[li] <- &de{key, meta.Value(), turi}
 				} else {
 					chans[li] <- nil
 				}
@@ -174,16 +179,16 @@ func (cl *BW2Client) GetMetadataKey(uri, key string) (*MetadataTuple, error) {
 	wg.Wait()
 	//check error
 	if ge != nil {
-		return nil, ge
+		return nil, "", ge
 	}
 	//otherwise, iterate in reverse order to prefer more specified metadata
 	for i := len(parts) - 1; i >= 0; i-- {
 		v := <-chans[i]
 		if v != nil {
-			return v, nil
+			return v.M, v.O, nil
 		}
 	}
-	return nil, nil
+	return nil, "", nil
 }
 
 // Print a line to stdout that depicts the local router status, typically
