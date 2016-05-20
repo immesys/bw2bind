@@ -24,11 +24,11 @@ const (
 	cmdMakeEntity   = "make"
 	cmdMakeChain    = "makc"
 	cmdBuildChain   = "bldc"
-	cmdAddPrefDot   = "adpd"
-	cmdAddPrefChain = "adpc"
-	cmdDelPrefDot   = "dlpd"
-	cmdDelPrefChain = "dlpc"
-	cmdSetEntity    = "sete"
+	//	cmdAddPrefDot   = "adpd"
+	//cmdAddPrefChain = "adpc"
+	//	cmdDelPrefDot   = "dlpd"
+	//	cmdDelPrefChain = "dlpc"
+	cmdSetEntity = "sete"
 
 	//New for 2.1.x
 	cmdPutDot                = "putd"
@@ -46,6 +46,12 @@ const (
 	cmdResolveRegistryObject = "rsro"
 	cmdUpdateSRVRecord       = "usrv"
 	cmdListDROffers          = "ldro"
+
+	cmdMakeView      = "mkvw"
+	cmdSubscribeView = "vsub"
+	cmdPublishView   = "vpub"
+	cmdListView      = "vlst"
+	cmdUnsubscribe   = "usub"
 
 	cmdResponse = "resp"
 	cmdResult   = "rslt"

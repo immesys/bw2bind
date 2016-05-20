@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/immesys/bw2/objects"
@@ -186,6 +187,7 @@ type BuildChainParams struct {
 	// The VK to grant to
 	To string
 }
+
 type SimpleMessage struct {
 	From     string
 	URI      string
@@ -250,4 +252,22 @@ func (sm *SimpleMessage) GetOnePODF(df string) PayloadObject {
 		}
 	}
 	return nil
+}
+
+type View struct {
+	vid  int
+	cl   *BW2Client
+	cbz  []func()
+	cbmu sync.Mutex
+}
+
+type InterfaceDescriptor struct {
+	URI       string            `msgpack:"uri"`
+	Interface string            `msgpack:"iface"`
+	Service   string            `msgpack:"svc"`
+	Namespace string            `msgpack:"namespace"`
+	Prefix    string            `msgpack:"prefix"`
+	Suffix    string            `msgpack:"suffix"`
+	Metadata  map[string]string `msgpack:"metadata"`
+	v         *View
 }

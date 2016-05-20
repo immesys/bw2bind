@@ -4,13 +4,17 @@ import (
 	"bytes"
 	"fmt"
 	"math/big"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"gopkg.in/vmihailenco/msgpack.v2"
+
 	"github.com/immesys/bw2/crypto"
 	"github.com/immesys/bw2/objects"
+	"github.com/immesys/bw2bind/expr"
 	"github.com/mgutz/ansi"
 )
 
@@ -64,6 +68,12 @@ func (cl *BW2Client) SetMetadata(uri, key, val string) error {
 		URI:            uri,
 		Persist:        true,
 	})
+}
+
+func (cl *BW2Client) DevelopTrigger() {
+	seqno := cl.GetSeqNo()
+	req := createFrame("devl", seqno)
+	<-cl.transact(req)
 }
 
 func (cl *BW2Client) DelMetadata(uri, key string) error {
@@ -553,4 +563,172 @@ func (cl *BW2Client) CreateLongAlias(account int, key []byte, val []byte) error 
 	req.AddHeaderB("content", val)
 	req.AddHeaderB("key", key)
 	return (<-cl.transact(req)).MustResponse()
+}
+func (cl *BW2Client) Unsubscribe(handle string) error {
+	seqno := cl.GetSeqNo()
+	req := createFrame(cmdUnsubscribe, seqno)
+	req.AddHeader("handle", handle)
+	return (<-cl.transact(req)).MustResponse()
+}
+func (cl *BW2Client) CreateView(expression expr.M) (*View, error) {
+	mp, err := msgpack.Marshal(expression)
+	seqno := cl.GetSeqNo()
+	req := createFrame(cmdMakeView, seqno)
+	req.AddHeaderB("msgpack", mp)
+	rc := cl.transact(req)
+	fr := <-rc
+	if err := fr.MustResponse(); err != nil {
+		return nil, err
+	}
+	vids, _ := fr.GetFirstHeader("id")
+	vid, err := strconv.ParseUint(vids, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	rv := &View{vid: int(vid), cl: cl}
+	go func() {
+		for _ = range rc {
+			rv.cbmu.Lock()
+			for _, cb := range rv.cbz {
+				cb()
+			}
+		}
+	}()
+	return rv, nil
+}
+func (v *View) OnChange(f func()) {
+	v.cbmu.Lock()
+	v.cbz = append(v.cbz, f)
+	v.cbmu.Unlock()
+}
+func (v *View) List() ([]*InterfaceDescriptor, error) {
+	rv := []*InterfaceDescriptor{}
+	seqno := v.cl.GetSeqNo()
+	req := createFrame(cmdListView, seqno)
+	req.AddHeader("id", strconv.Itoa(v.vid))
+	fr := <-v.cl.transact(req)
+	if err := fr.MustResponse(); err != nil {
+		return nil, err
+	}
+	for i := 0; i < fr.NumPOs(); i++ {
+		po, _ := fr.GetPO(i)
+		poz := po.(MsgPackPayloadObject)
+		ifd := InterfaceDescriptor{}
+		err := poz.ValueInto(&ifd)
+		if err != nil {
+			return nil, err
+		}
+		rv = append(rv, &ifd)
+	}
+	return rv, nil
+}
+func chToCB(ch chan *SimpleMessage, cb func(sm *SimpleMessage)) {
+	go func() {
+		for m := range ch {
+			cb(m)
+		}
+	}()
+}
+func (v *View) PubSlot(iface, slot string, poz []PayloadObject) error {
+	return v.pubSigSlot(iface, "slot", slot, poz)
+}
+func (v *View) PubSignal(iface, signal string, poz []PayloadObject) error {
+	return v.pubSigSlot(iface, "signal", signal, poz)
+}
+func (v *View) pubSigSlot(iface, t, sigslot string, poz []PayloadObject) error {
+	seqno := v.cl.GetSeqNo()
+	req := createFrame(cmdPublishView, seqno)
+	req.AddHeader("id", strconv.Itoa(v.vid))
+	req.AddHeader(t, sigslot)
+	req.AddHeader("iface", iface)
+	for _, po := range poz {
+		req.AddPayloadObject(po)
+	}
+	return (<-v.cl.transact(req)).MustResponse()
+}
+func (v *View) SubSlot(iface, slot string) (chan *SimpleMessage, error) {
+	return v.subSigSlot(iface, "slot", slot)
+}
+func (v *View) SubSlotOrExit(iface, slot string) chan *SimpleMessage {
+	rv, err := v.SubSlot(iface, slot)
+	if err != nil {
+		fmt.Println("View error in SubSlotOrExit:", err)
+		os.Exit(1)
+	}
+	return rv
+}
+func (v *View) SubSlotF(iface, slot string, cb func(sm *SimpleMessage)) error {
+	rv, err := v.SubSlot(iface, slot)
+	chToCB(rv, cb)
+	return err
+}
+func (v *View) SubSlotFOrExit(iface, slot string, cb func(sm *SimpleMessage)) {
+	rv, err := v.SubSlot(iface, slot)
+	if err != nil {
+		fmt.Println("View error in SubSlotFOrExit:", err)
+		os.Exit(1)
+	}
+	chToCB(rv, cb)
+}
+func (v *View) SubSignal(iface, signal string) (chan *SimpleMessage, error) {
+	return v.subSigSlot(iface, "signal", signal)
+}
+func (v *View) SubSignalOrExit(iface, signal string) chan *SimpleMessage {
+	rv, err := v.SubSignal(iface, signal)
+	if err != nil {
+		fmt.Println("View error in SubSignalOrExit:", err)
+		os.Exit(1)
+	}
+	return rv
+}
+func (v *View) SubSignalF(iface, signal string, cb func(sm *SimpleMessage)) error {
+	rv, err := v.SubSignal(iface, signal)
+	chToCB(rv, cb)
+	return err
+}
+func (v *View) SubSignalFOrExit(iface, signal string, cb func(sm *SimpleMessage)) {
+	rv, err := v.SubSignal(iface, signal)
+	chToCB(rv, cb)
+	if err != nil {
+		fmt.Println("View error in SubSignalFOrExit:", err)
+		os.Exit(1)
+	}
+}
+func (v *View) subSigSlot(iface, t, sigslot string) (chan *SimpleMessage, error) {
+	seqno := v.cl.GetSeqNo()
+	req := createFrame(cmdSubscribeView, seqno)
+	req.AddHeader("id", strconv.Itoa(v.vid))
+	req.AddHeader(t, sigslot)
+	req.AddHeader("iface", iface)
+	rsp := v.cl.transact(req)
+	//First response is the RESP frame
+	fr, _ := <-rsp
+	err := fr.MustResponse()
+	if err != nil {
+		return nil, err
+	}
+	//Generate converted output channel
+	rv := make(chan *SimpleMessage, 10)
+	go func() {
+		for f := range rsp {
+			sm := SimpleMessage{}
+			sm.From, _ = f.GetFirstHeader("from")
+			sm.URI, _ = f.GetFirstHeader("uri")
+			sm.ROs = f.GetAllROs()
+			poslice := make([]PayloadObject, f.NumPOs())
+			errslice := make([]error, 0)
+			for i := 0; i < f.NumPOs(); i++ {
+				var err error
+				poslice[i], err = f.GetPO(i)
+				if err != nil {
+					errslice = append(errslice, err)
+				}
+			}
+			sm.POs = poslice
+			sm.POErrors = errslice
+			rv <- &sm
+		}
+		close(rv)
+	}()
+	return rv, nil
 }

@@ -334,9 +334,15 @@ func (cl *BW2Client) SubscribeOrExit(p *SubscribeParams) chan *SimpleMessage {
 	return nil
 }
 
-// Subscribe will consume a URI specified by SubscribeParams, it returns a
-// channel that received messages will be written to.
 func (cl *BW2Client) Subscribe(p *SubscribeParams) (chan *SimpleMessage, error) {
+	ch, _, e := cl.SubscribeH(p)
+	return ch, e
+}
+
+// Subscribe will consume a URI specified by SubscribeParams, it returns a
+// channel that received messages will be written to, a handle that can be
+// passed to unsubscribe, and an error
+func (cl *BW2Client) SubscribeH(p *SubscribeParams) (chan *SimpleMessage, string, error) {
 	seqno := cl.GetSeqNo()
 	req := createFrame(cmdSubscribe, seqno)
 	if cl.defAutoChain != nil {
@@ -370,9 +376,11 @@ func (cl *BW2Client) Subscribe(p *SubscribeParams) (chan *SimpleMessage, error) 
 	//First response is the RESP frame
 	fr, _ := <-rsp
 	err := fr.MustResponse()
+
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
+	handle, _ := fr.GetFirstHeader("handle")
 	//Generate converted output channel
 	rv := make(chan *SimpleMessage, 10)
 	go func() {
@@ -396,7 +404,7 @@ func (cl *BW2Client) Subscribe(p *SubscribeParams) (chan *SimpleMessage, error) 
 		}
 		close(rv)
 	}()
-	return rv, nil
+	return rv, handle, nil
 }
 
 // SetEntity will tell your local router "who you are". This is the

@@ -94,7 +94,7 @@ func (ifc *Interface) updateRegistration() {
 	err := ifc.SetMetadata("lastalive", time.Now().String())
 	handleErr(err)
 }
-func (ifc *Interface) PublishSignal(signal string, poz []PayloadObject) error {
+func (ifc *Interface) PublishSignal(signal string, poz ...PayloadObject) error {
 	return ifc.svc.cl.Publish(&PublishParams{
 		URI:            ifc.SignalURI(signal),
 		AutoChain:      true,
