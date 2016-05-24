@@ -241,6 +241,15 @@ const PODFMaskSpawnpointLog = `2.0.2.0/32`
 const PODFSpawnpointLog = `2.0.2.0`
 const POMaskSpawnpointLog = 32
 
+//SpawnpointHeartbeat (2.0.2.1/32): SpawnPoint heartbeat
+//A heartbeat message from spawnpoint. It is a msgpack dictionary that contains
+//the keys "Alias", "Time", "TotalMem", "TotalCpuShares", "AvailableMem", and
+//"AvailableCpuShares".
+const PONumSpawnpointHeartbeat = 33554945
+const PODFMaskSpawnpointHeartbeat = `2.0.2.1/32`
+const PODFSpawnpointHeartbeat = `2.0.2.1`
+const POMaskSpawnpointHeartbeat = 32
+
 //SMetadata (2.0.3.1/32): Simple Metadata entry
 //This contains a simple "val" string and "ts" int64 metadata entry. The key is
 //determined by the URI. Other information MAY be present in the msgpacked
@@ -335,11 +344,4 @@ const PONumSpawnpointConfig = 1124073984
 const PODFMaskSpawnpointConfig = `67.0.2.0/32`
 const PODFSpawnpointConfig = `67.0.2.0`
 const POMaskSpawnpointConfig = 32
-
-//SpawnpointHeartbeat (67.0.2.1/32): SpawnPoint heartbeat
-//A heartbeat message from spawnpoint
-const PONumSpawnpointHeartbeat = 1124073985
-const PODFMaskSpawnpointHeartbeat = `67.0.2.1/32`
-const PODFSpawnpointHeartbeat = `67.0.2.1`
-const POMaskSpawnpointHeartbeat = 32
 
