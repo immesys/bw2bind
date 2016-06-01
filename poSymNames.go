@@ -250,6 +250,15 @@ const PODFMaskSpawnpointHeartbeat = `2.0.2.1/32`
 const PODFSpawnpointHeartbeat = `2.0.2.1`
 const POMaskSpawnpointHeartbeat = 32
 
+//SpawnpointSvcHb (2.0.2.2/32): SpawnPoint Service Heartbeat
+//A heartbeat from spawnpoint about a currently running service. It is a
+//msgpack dictionary that contains the keys "SpawnpointURI", "Name", "Time",
+//"MemAlloc", and "CpuShares".
+const PONumSpawnpointSvcHb = 33554946
+const PODFMaskSpawnpointSvcHb = `2.0.2.2/32`
+const PODFSpawnpointSvcHb = `2.0.2.2`
+const POMaskSpawnpointSvcHb = 32
+
 //SMetadata (2.0.3.1/32): Simple Metadata entry
 //This contains a simple "val" string and "ts" int64 metadata entry. The key is
 //determined by the URI. Other information MAY be present in the msgpacked
@@ -261,8 +270,8 @@ const POMaskSMetadata = 32
 
 //HSBLightMessage (2.0.5.1/32): HSBLight Message
 //This object may contain "hue", "saturation", "brightness" fields with a float
-//from 0 to 1. It may also contain an "on" key with a boolean. Omitting fields
-//leaves them at their previous state.
+//from 0 to 1. It may also contain an "state" key with a boolean. Omitting
+//fields leaves them at their previous state.
 const PONumHSBLightMessage = 33555713
 const PODFMaskHSBLightMessage = `2.0.5.1/32`
 const PODFHSBLightMessage = `2.0.5.1`
