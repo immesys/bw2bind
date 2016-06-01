@@ -99,6 +99,14 @@ const PODFMaskHamiltonBase = `2.0.4.0/24`
 const PODFHamiltonBase = `2.0.4.0`
 const POMaskHamiltonBase = 24
 
+//BW2ChatMessages (2.0.7.0/24): BW2ChatMessages
+//These are MsgPack dictionaries sent for the BW2Chat program
+//(https://github.com/gtfierro/bw2chat)
+const PONumBW2ChatMessages = 33556224
+const PODFMaskBW2ChatMessages = `2.0.7.0/24`
+const PODFBW2ChatMessages = `2.0.7.0`
+const POMaskBW2ChatMessages = 24
+
 //HamiltonTelemetry (2.0.4.64/26): Hamilton Telemetry
 //This object contains a "#" field for the serial number, as well as possibly
 //containing an "A" field with a list of X, Y, and Z accelerometer values. A
@@ -233,6 +241,24 @@ const PODFMaskSpawnpointLog = `2.0.2.0/32`
 const PODFSpawnpointLog = `2.0.2.0`
 const POMaskSpawnpointLog = 32
 
+//SpawnpointHeartbeat (2.0.2.1/32): SpawnPoint heartbeat
+//A heartbeat message from spawnpoint. It is a msgpack dictionary that contains
+//the keys "Alias", "Time", "TotalMem", "TotalCpuShares", "AvailableMem", and
+//"AvailableCpuShares".
+const PONumSpawnpointHeartbeat = 33554945
+const PODFMaskSpawnpointHeartbeat = `2.0.2.1/32`
+const PODFSpawnpointHeartbeat = `2.0.2.1`
+const POMaskSpawnpointHeartbeat = 32
+
+//SpawnpointSvcHb (2.0.2.2/32): SpawnPoint Service Heartbeat
+//A heartbeat from spawnpoint about a currently running service. It is a
+//msgpack dictionary that contains the keys "SpawnpointURI", "Name", "Time",
+//"MemAlloc", and "CpuShares".
+const PONumSpawnpointSvcHb = 33554946
+const PODFMaskSpawnpointSvcHb = `2.0.2.2/32`
+const PODFSpawnpointSvcHb = `2.0.2.2`
+const POMaskSpawnpointSvcHb = 32
+
 //SMetadata (2.0.3.1/32): Simple Metadata entry
 //This contains a simple "val" string and "ts" int64 metadata entry. The key is
 //determined by the URI. Other information MAY be present in the msgpacked
@@ -244,20 +270,55 @@ const POMaskSMetadata = 32
 
 //HSBLightMessage (2.0.5.1/32): HSBLight Message
 //This object may contain "hue", "saturation", "brightness" fields with a float
-//from 0 to 1. It may also contain an "on" key with a boolean. Omitting fields
-//leaves them at their previous state.
+//from 0 to 1. It may also contain an "state" key with a boolean. Omitting
+//fields leaves them at their previous state.
 const PONumHSBLightMessage = 33555713
 const PODFMaskHSBLightMessage = `2.0.5.1/32`
 const PODFHSBLightMessage = `2.0.5.1`
 const POMaskHSBLightMessage = 32
 
-//WaveletManifest (2.0.6.1/32): Wavelet manifest
-//This msgpack dictionary contains a wavelet manifest (see
-//github.com/immesys/wavelet)
-const PONumWaveletManifest = 33555969
-const PODFMaskWaveletManifest = `2.0.6.1/32`
-const PODFWaveletManifest = `2.0.6.1`
-const POMaskWaveletManifest = 32
+//InterfaceDescriptor (2.0.6.1/32): InterfaceDescriptor
+//This object is used to describe an interface. It contains "uri",
+//"iface","svc","namespace" "prefix" and "metadata" keys.
+const PONumInterfaceDescriptor = 33555969
+const PODFMaskInterfaceDescriptor = `2.0.6.1/32`
+const PODFInterfaceDescriptor = `2.0.6.1`
+const POMaskInterfaceDescriptor = 32
+
+//BW2Chat_CreateRoomMessage (2.0.7.1/32): BW2Chat_CreateRoomMessage
+//A dictionary with a single key "Name" indicating the room to be created. This
+//will likely be deprecated.
+const PONumBW2Chat_CreateRoomMessage = 33556225
+const PODFMaskBW2Chat_CreateRoomMessage = `2.0.7.1/32`
+const PODFBW2Chat_CreateRoomMessage = `2.0.7.1`
+const POMaskBW2Chat_CreateRoomMessage = 32
+
+//BW2Chat_ChatMessage (2.0.7.2/32): BW2Chat_ChatMessage
+//A textual message to be sent to all members of a chatroom. This is a
+//dictionary with three keys: 'Room', the name of the room to publish to (this
+//is actually implicit in the publishing), 'From', the alias you are using for
+//the chatroom, and 'Message', the actual string to be displayed to all users
+//in the room.
+const PONumBW2Chat_ChatMessage = 33556226
+const PODFMaskBW2Chat_ChatMessage = `2.0.7.2/32`
+const PODFBW2Chat_ChatMessage = `2.0.7.2`
+const POMaskBW2Chat_ChatMessage = 32
+
+//BW2Chat_JoinRoom (2.0.7.3/32): BW2Chat_JoinRoom
+//Notify users in the chatroom that you have joined. Dictionary with a single
+//key "Alias" that has a value of your nickname
+const PONumBW2Chat_JoinRoom = 33556227
+const PODFMaskBW2Chat_JoinRoom = `2.0.7.3/32`
+const PODFBW2Chat_JoinRoom = `2.0.7.3`
+const POMaskBW2Chat_JoinRoom = 32
+
+//BW2Chat_LeaveRoom (2.0.7.4/32): BW2Chat_LeaveRoom
+//Notify users in the chatroom that you have left. Dictionary with a single key
+//"Alias" that has a value of your nickname
+const PONumBW2Chat_LeaveRoom = 33556228
+const PODFMaskBW2Chat_LeaveRoom = `2.0.7.4/32`
+const PODFBW2Chat_LeaveRoom = `2.0.7.4`
+const POMaskBW2Chat_LeaveRoom = 32
 
 //String (64.0.1.0/32): String
 //A plain string with no rigid semantic meaning. This can be thought of as a
@@ -292,11 +353,4 @@ const PONumSpawnpointConfig = 1124073984
 const PODFMaskSpawnpointConfig = `67.0.2.0/32`
 const PODFSpawnpointConfig = `67.0.2.0`
 const POMaskSpawnpointConfig = 32
-
-//SpawnpointHeartbeat (67.0.2.1/32): SpawnPoint heartbeat
-//A heartbeat message from spawnpoint
-const PONumSpawnpointHeartbeat = 1124073985
-const PODFMaskSpawnpointHeartbeat = `67.0.2.1/32`
-const PODFSpawnpointHeartbeat = `67.0.2.1`
-const POMaskSpawnpointHeartbeat = 32
 
