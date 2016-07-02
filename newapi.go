@@ -512,7 +512,28 @@ func (cl *BW2Client) NewDesignatedRouterOffer(account int, nsvk string, dr *obje
 	}
 	return (<-cl.transact(req)).MustResponse()
 }
-
+func (cl *BW2Client) RevokeDesignatedRouterOffer(account int, nsvk string, dr *objects.Entity) error {
+	seqno := cl.GetSeqNo()
+	req := createFrame(cmdRevokeDROffer, seqno)
+	req.AddHeader("account", strconv.Itoa(account))
+	req.AddHeader("nsvk", nsvk)
+	if dr != nil {
+		po := CreateBasePayloadObject(objects.ROEntityWKey, dr.GetSigningBlob())
+		req.AddPayloadObject(po)
+	}
+	return (<-cl.transact(req)).MustResponse()
+}
+func (cl *BW2Client) RevokeAcceptanceOfDesignatedRouterOffer(account int, drvk string, ns *objects.Entity) error {
+	seqno := cl.GetSeqNo()
+	req := createFrame(cmdRevokeDRAccept, seqno)
+	req.AddHeader("account", strconv.Itoa(account))
+	req.AddHeader("drvk", drvk)
+	if ns != nil {
+		po := CreateBasePayloadObject(objects.ROEntityWKey, ns.GetSigningBlob())
+		req.AddPayloadObject(po)
+	}
+	return (<-cl.transact(req)).MustResponse()
+}
 func (cl *BW2Client) GetDesignatedRouterOffers(nsvk string) (active string, activesrv string, drvks []string, err error) {
 	seqno := cl.GetSeqNo()
 	req := createFrame(cmdListDROffers, seqno)
