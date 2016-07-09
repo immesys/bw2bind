@@ -342,6 +342,9 @@ func (cl *BW2Client) ResolveRegistry(key string) (ro objects.RoutingObject, vali
 	case "revoked":
 		validity = StateRevoked
 		return
+	case "unknown":
+		validity = StateUnknown
+		return
 	default:
 		panic(valid)
 	}
@@ -533,6 +536,48 @@ func (cl *BW2Client) RevokeAcceptanceOfDesignatedRouterOffer(account int, drvk s
 		req.AddPayloadObject(po)
 	}
 	return (<-cl.transact(req)).MustResponse()
+}
+
+// func (cl *BW2Client) RevokeDOT(account int, dothash string) (*objects.Revocation, error) {
+//
+// }
+func (cl *BW2Client) RevokeEntity(vk string, comment string) (string, []byte, error) {
+	seqno := cl.GetSeqNo()
+	req := createFrame(cmdRevokeRO, seqno)
+	req.AddHeader("entity", vk)
+	fr := <-cl.transact(req)
+	if err := fr.MustResponse(); err != nil {
+		return "", nil, err
+	}
+	hash, _ := fr.GetFirstHeader("hash")
+	po := fr.POs[0].PO
+	return hash, po, nil
+}
+func (cl *BW2Client) RevokeDOT(hash string, comment string) (string, []byte, error) {
+	seqno := cl.GetSeqNo()
+	req := createFrame(cmdRevokeRO, seqno)
+	req.AddHeader("dot", hash)
+	fr := <-cl.transact(req)
+	if err := fr.MustResponse(); err != nil {
+		return "", nil, err
+	}
+	rhash, _ := fr.GetFirstHeader("hash")
+	po := fr.POs[0].PO
+	return rhash, po, nil
+}
+func (cl *BW2Client) PublishRevocation(account int, blob []byte) (string, error) {
+	seqno := cl.GetSeqNo()
+	req := createFrame(cmdPutRevocation, seqno)
+	//Strip first byte of blob, assuming it came from a file
+	po := CreateBasePayloadObject(PONumRORevocation, blob)
+	req.AddPayloadObject(po)
+	req.AddHeader("account", strconv.Itoa(account))
+	fr := <-cl.transact(req)
+	if err := fr.MustResponse(); err != nil {
+		return "", err
+	}
+	hash, _ := fr.GetFirstHeader("hash")
+	return hash, nil
 }
 func (cl *BW2Client) GetDesignatedRouterOffers(nsvk string) (active string, activesrv string, drvks []string, err error) {
 	seqno := cl.GetSeqNo()
