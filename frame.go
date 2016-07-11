@@ -53,6 +53,8 @@ const (
 	cmdUnsubscribe           = "usub"
 	cmdRevokeDROffer         = "rdro"
 	cmdRevokeDRAccept        = "rdra"
+	cmdRevokeRO              = "revk"
+	cmdPutRevocation         = "prvk"
 
 	cmdResponse = "resp"
 	cmdResult   = "rslt"
