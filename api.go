@@ -55,10 +55,13 @@ func (cl *BW2Client) ClearAutoChainOverride() {
 }
 
 // Connect will connect to a BOSSWAVE local router. If "to" is the empty
-// string, it will default to localhost port 28589
+// string, it will default to $BW2_AGENT if set else localhost:28589
 func Connect(to string) (*BW2Client, error) {
 	if to == "" {
-		to = "localhost:28589"
+		to = os.Getenv("BW2_AGENT")
+		if to == "" {
+			to = "localhost:28589"
+		}
 	}
 	_, _, err := net.SplitHostPort(to)
 	if err != nil && err.Error() == "missing port in address" {
