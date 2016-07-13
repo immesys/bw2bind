@@ -362,7 +362,6 @@ func (cl *BW2Client) FindDOTsFromVK(vk string) ([]*objects.DOT, []RegistryValidi
 	rvv := []RegistryValidity{}
 	for _, po := range fr.POs {
 		rpo, err := LoadPayloadObject(po.PONum, po.PO)
-		fmt.Println("ponum is", po.PONum)
 		if err != nil {
 			return nil, nil, err
 		}
