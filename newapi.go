@@ -284,7 +284,7 @@ func (cl *BW2Client) ResolveShortAlias(al string) (data []byte, zero bool, err e
 func (cl *BW2Client) ResolveEmbeddedAlias(al string) (data string, err error) {
 	seqno := cl.GetSeqNo()
 	req := createFrame(cmdResolveAlias, seqno)
-	req.AddHeader("longkey", al)
+	req.AddHeader("embedded", al)
 	fr := <-cl.transact(req)
 	if err := fr.MustResponse(); err != nil {
 		return "", err
@@ -318,6 +318,7 @@ func (cl *BW2Client) ValidityToString(i RegistryValidity, err error) string {
 	}
 	return "<WTF?>"
 }
+
 func (cl *BW2Client) ResolveRegistry(key string) (ro objects.RoutingObject, validity RegistryValidity, err error) {
 	seqno := cl.GetSeqNo()
 	req := createFrame(cmdResolveRegistryObject, seqno)
@@ -348,6 +349,45 @@ func (cl *BW2Client) ResolveRegistry(key string) (ro objects.RoutingObject, vali
 	default:
 		panic(valid)
 	}
+}
+func (cl *BW2Client) FindDOTsFromVK(vk string) ([]*objects.DOT, []RegistryValidity, error) {
+	seqno := cl.GetSeqNo()
+	req := createFrame(cmdFindDots, seqno)
+	req.AddHeader("vk", vk)
+	fr := <-cl.transact(req)
+	if er := fr.MustResponse(); er != nil {
+		return nil, nil, er
+	}
+	rvd := []*objects.DOT{}
+	rvv := []RegistryValidity{}
+	for _, po := range fr.POs {
+		rpo, err := LoadPayloadObject(po.PONum, po.PO)
+		if err != nil {
+			return nil, nil, err
+		}
+		if po.PONum == PONumString {
+			switch strings.ToLower(rpo.(TextPayloadObject).Value()) {
+			case "valid":
+				rvv = append(rvv, StateValid)
+			case "expired":
+				rvv = append(rvv, StateExpired)
+			case "revoked":
+				rvv = append(rvv, StateRevoked)
+			case "unknown":
+				rvv = append(rvv, StateUnknown)
+			default:
+				panic("unknown validity string: " + rpo.(TextPayloadObject).Value())
+			}
+		}
+		if po.PONum == PONumROAccessDOT {
+			doti, err := objects.NewDOT(po.PONum, rpo.(PayloadObject).GetContents())
+			if err != nil {
+				return nil, nil, err
+			}
+			rvd = append(rvd, doti.(*objects.DOT))
+		}
+	}
+	return rvd, rvv, nil
 }
 
 type BalanceInfo struct {
@@ -629,6 +669,21 @@ func (cl *BW2Client) CreateLongAlias(account int, key []byte, val []byte) error 
 	req.AddHeaderB("content", val)
 	req.AddHeaderB("key", key)
 	return (<-cl.transact(req)).MustResponse()
+}
+func (cl *BW2Client) CreateShortAlias(account int, val []byte) (string, error) {
+	if len(val) > 32 {
+		return "", fmt.Errorf("Value must be shorter than 32 bytes")
+	}
+	seqno := cl.GetSeqNo()
+	req := createFrame(cmdMakeShortAlias, seqno)
+	req.AddHeader("account", strconv.Itoa(account))
+	req.AddHeaderB("content", val)
+	fe := <-cl.transact(req)
+	if err := fe.MustResponse(); err != nil {
+		return "", err
+	}
+	k, _ := fe.GetFirstHeader("hexkey")
+	return k, nil
 }
 func (cl *BW2Client) Unsubscribe(handle string) error {
 	seqno := cl.GetSeqNo()
