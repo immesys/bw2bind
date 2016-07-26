@@ -31,6 +31,7 @@ type Interface struct {
 	prefix string
 	name   string
 	auto   bool
+	last   time.Time
 }
 
 func (cl *BW2Client) RegisterService(baseuri string, name string) *Service {
@@ -75,6 +76,9 @@ func (s *Service) RegisterInterface(prefix string, name string) *Interface {
 	s.mu.Unlock()
 	return rv
 }
+
+// Registers an interface that will only publish a heartbeat when the interface
+// is published on
 func (s *Service) RegisterInterfaceHeartbeatOnPub(prefix string, name string) *Interface {
 	prefix = strings.TrimSuffix(prefix, "/")
 	prefix = strings.TrimPrefix(prefix, "/")
@@ -113,8 +117,9 @@ func (ifc *Interface) updateRegistration() {
 	handleErr(err)
 }
 func (ifc *Interface) PublishSignal(signal string, poz ...PayloadObject) error {
-	if !ifc.auto {
+	if !ifc.auto && time.Now().Sub(ifc.last) > RegistrationInterval*time.Second {
 		ifc.updateRegistration()
+		ifc.last = time.Now()
 	}
 	return ifc.svc.cl.Publish(&PublishParams{
 		URI:            ifc.SignalURI(signal),
