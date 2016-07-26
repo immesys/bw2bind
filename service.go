@@ -30,6 +30,7 @@ type Interface struct {
 	svc    *Service
 	prefix string
 	name   string
+	auto   bool
 }
 
 func (cl *BW2Client) RegisterService(baseuri string, name string) *Service {
@@ -47,7 +48,9 @@ func (s *Service) registerLoop() {
 		handleErr(err)
 		s.mu.Lock()
 		for _, i := range s.ifaces {
-			i.updateRegistration()
+			if i.auto {
+				i.updateRegistration()
+			}
 		}
 		s.mu.Unlock()
 		time.Sleep(RegistrationInterval * time.Second)
@@ -65,6 +68,21 @@ func (s *Service) RegisterInterface(prefix string, name string) *Interface {
 		svc:    s,
 		prefix: prefix,
 		name:   name,
+		auto:   true,
+	}
+	s.mu.Lock()
+	s.ifaces = append(s.ifaces, rv)
+	s.mu.Unlock()
+	return rv
+}
+func (s *Service) RegisterInterfaceHeartbeatOnPub(prefix string, name string) *Interface {
+	prefix = strings.TrimSuffix(prefix, "/")
+	prefix = strings.TrimPrefix(prefix, "/")
+	rv := &Interface{
+		svc:    s,
+		prefix: prefix,
+		name:   name,
+		auto:   false,
 	}
 	s.mu.Lock()
 	s.ifaces = append(s.ifaces, rv)
@@ -95,6 +113,9 @@ func (ifc *Interface) updateRegistration() {
 	handleErr(err)
 }
 func (ifc *Interface) PublishSignal(signal string, poz ...PayloadObject) error {
+	if !ifc.auto {
+		ifc.updateRegistration()
+	}
 	return ifc.svc.cl.Publish(&PublishParams{
 		URI:            ifc.SignalURI(signal),
 		AutoChain:      true,
