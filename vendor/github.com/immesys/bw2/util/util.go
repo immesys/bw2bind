@@ -25,6 +25,13 @@ import (
 	"time"
 )
 
+var EverybodySlice = []byte{0xfb, 0xef, 0xbe, 0x12, 0xa3, 0xff, 0xfd, 0x66,
+	0x38, 0xef, 0xb9, 0xe8, 0x7c, 0xc6, 0x14, 0xcf,
+	0x63, 0x0d, 0x14, 0x1b, 0x1f, 0x6b, 0x92, 0x0a,
+	0xfd, 0x10, 0x65, 0x46, 0xf2, 0xa9, 0xb4, 0x36}
+
+const EverybodyVK = "----EqP__WY477nofMYUz2MNFBsfa5IK_RBlRvKptDY="
+
 //A URI looks like
 // a/b/c/d ..
 // it has no slash at the start or end. There may be many plusses, and/or one star
@@ -39,12 +46,11 @@ import (
 // finding it in that case can be difficult
 
 //AnalyzeSuffix checks a given URI for schema validity and possession of characteristics
-func AnalyzeSuffix(uri string) (valid, hasStar, hasPlus, hasDollar, hasBang bool) {
+func AnalyzeSuffix(uri string) (valid, hasStar, hasPlus, hasBang bool) {
 	cells := strings.Split(uri, "/")
 	valid = false
 	hasStar = false
 	hasPlus = false
-	hasDollar = false
 	hasBang = false
 
 	for _, c := range cells {
@@ -63,8 +69,6 @@ func AnalyzeSuffix(uri string) (valid, hasStar, hasPlus, hasDollar, hasBang bool
 				hasPlus = true
 			case "!":
 				return
-			case "$":
-				hasDollar = true
 			default:
 				k := c[0]
 				if !('0' <= k && k <= '9' ||
@@ -72,7 +76,8 @@ func AnalyzeSuffix(uri string) (valid, hasStar, hasPlus, hasDollar, hasBang bool
 					'A' <= k && k <= 'Z' ||
 					k == '-' || k == '_' ||
 					k == ',' || k == '(' ||
-					k == ')' || k == '.') {
+					k == ')' || k == '.' ||
+					k == '$') {
 					return
 				}
 			}
@@ -91,7 +96,8 @@ func AnalyzeSuffix(uri string) (valid, hasStar, hasPlus, hasDollar, hasBang bool
 					'A' <= k && k <= 'Z' ||
 					k == '-' || k == '_' ||
 					k == ',' || k == '(' ||
-					k == ')' || k == '.') {
+					k == ')' || k == '.' ||
+					k == '$') {
 					return
 				}
 			}

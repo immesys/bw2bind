@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/immesys/bw2/util/bwe"
 )
 
 const (
@@ -61,12 +63,16 @@ const (
 	CmdResolveRegistryObject = "rsro"
 	CmdUpdateSRVRecord       = "usrv"
 	CmdListDROffers          = "ldro"
-
-	CmdMakeView      = "mkvw"
-	CmdSubscribeView = "vsub"
-	CmdPublishView   = "vpub"
-	CmdListView      = "vlst"
-	CmdUnsubscribe   = "usub"
+	CmdMakeView              = "mkvw"
+	CmdSubscribeView         = "vsub"
+	CmdPublishView           = "vpub"
+	CmdListView              = "vlst"
+	CmdUnsubscribe           = "usub"
+	CmdRevokeDROffer         = "rdro"
+	CmdRevokeDRAccept        = "rdra"
+	CmdRevokeRO              = "revk"
+	CmdPutRevocation         = "prvk"
+	CmdFindDots              = "fdot"
 
 	CmdResponse = "resp"
 	CmdResult   = "rslt"
@@ -327,20 +333,36 @@ func LoadFrameFromStream(s *bufio.Reader) (f *Frame, e error) {
 			f.ROs = append(f.ROs, ROEntry{ro, strconv.Itoa(ronum), strconv.Itoa(length)})
 		case "po":
 			ponums := strings.Split(tok[1], ":")
+			var dponum int
+			var iponum int
 			var ponum int
+			haveD := false
+			haveI := false
 			if len(ponums[1]) != 0 {
 				cx, err := strconv.ParseUint(ponums[1], 10, 32)
 				if err != nil {
 					return nil, err
 				}
-				ponum = int(cx)
-			} else {
+				iponum = int(cx)
+				ponum = iponum
+				haveI = true
+			}
+			if len(ponums[0]) != 0 {
 				cx, err := PONumFromDotForm(ponums[0])
 				if err != nil {
 					return nil, err
 				}
-				ponum = cx
+				dponum = cx
+				ponum = dponum
+				haveD = true
 			}
+			if haveI && haveD && iponum != dponum {
+				return nil, bwe.M(bwe.MalformedOOBCommand, "PONums do not match")
+			}
+			if !haveI && !haveD {
+				return nil, bwe.M(bwe.MalformedOOBCommand, "Missing PO number")
+			}
+
 			cx, err = strconv.ParseUint(tok[2], 10, 32)
 			if err != nil {
 				return nil, err
