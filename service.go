@@ -23,7 +23,7 @@ type Service struct {
 	name    string
 	baseuri string
 	ifaces  []*Interface
-	mu      sync.Mutex
+	mu      *sync.Mutex
 }
 
 type Interface struct {
@@ -36,7 +36,7 @@ type Interface struct {
 
 func (cl *BW2Client) RegisterService(baseuri string, name string) *Service {
 	baseuri = strings.TrimSuffix(baseuri, "/")
-	rv := &Service{cl: cl, baseuri: baseuri, name: name}
+	rv := &Service{cl: cl, baseuri: baseuri, name: name, mu: &sync.Mutex{}}
 	go rv.registerLoop()
 	return rv
 }
