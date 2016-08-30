@@ -30,12 +30,14 @@ func (sc *ServiceClient) AddInterface(prefix string, name string) *InterfaceClie
 }
 
 func (sc *ServiceClient) GetMetadata() (map[string]*MetadataTuple, error) {
-	md, _, err := sc.cl.GetMetadata(sc.baseuri)
+	svc := Service(*sc)
+	md, _, err := sc.cl.GetMetadata(svc.FullURI())
 	return md, err
 }
 
 func (sc *ServiceClient) GetMetadataKey(key string) (*MetadataTuple, error) {
-	md, _, err := sc.cl.GetMetadataKey(sc.baseuri, key)
+	svc := Service(*sc)
+	md, _, err := sc.cl.GetMetadataKey(svc.FullURI(), key)
 	return md, err
 }
 
