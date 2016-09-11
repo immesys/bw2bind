@@ -429,6 +429,19 @@ const PODFMaskGilesQueryError = `2.0.8.9/32`
 const PODFGilesQueryError = `2.0.8.9`
 const POMaskGilesQueryError = 32
 
+//L7G1Raw (2.0.10.1/32): L7G v1 Raw message
+//A map containing - srcmac: the MAC address of the sensor - srcip: the IP
+//address of the sensor, if available - popid: the ID of the point of presence
+//that received the packet - poptime: the boot time (in us) of the pop when the
+//message was received - brtime: the real time (in ns) at the border router
+//when the message was relayed to bosswave - rssi: the RSSI of the message at
+//the pop, if available - lqi: the LQI of the message at the pop, if available
+//- payload: the raw message
+const PONumL7G1Raw = 33556993
+const PODFMaskL7G1Raw = `2.0.10.1/32`
+const PODFL7G1Raw = `2.0.10.1`
+const POMaskL7G1Raw = 32
+
 //String (64.0.1.0/32): String
 //A plain string with no rigid semantic meaning. This can be thought of as a
 //print statement. Anything that has semantic meaning like a process log should
