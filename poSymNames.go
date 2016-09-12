@@ -442,6 +442,16 @@ const PODFMaskL7G1Raw = `2.0.10.1/32`
 const PODFL7G1Raw = `2.0.10.1`
 const POMaskL7G1Raw = 32
 
+//ChirpFeed (2.0.11.1/32): Chirp Anemometer Feed
+//A map containing - vendor: the vendor implementing the algorithm - sensor:
+//the anemometer this data is for - algorithm: symbol name of the algorithm
+//type/version - tofs: a list of src,dst,val time of flight measurements in
+//microseconds - extradata: a list of string extra from the algorithm
+const PONumChirpFeed = 33557249
+const PODFMaskChirpFeed = `2.0.11.1/32`
+const PODFChirpFeed = `2.0.11.1`
+const POMaskChirpFeed = 32
+
 //String (64.0.1.0/32): String
 //A plain string with no rigid semantic meaning. This can be thought of as a
 //print statement. Anything that has semantic meaning like a process log should
