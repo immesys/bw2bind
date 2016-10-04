@@ -111,8 +111,11 @@ func (cl *BW2Client) GetMetadata(uri string) (data map[string]*MetadataTuple,
 				URI:       turi + "/!meta/+",
 			})
 			if err != nil {
-				ge = err
 				close(chans[li])
+				// Ignore permission errors on prefixes of the original URI
+				if !(strings.HasPrefix(err.Error(), "[401]") && li < len(parts)-1) {
+					ge = err
+				}
 				return
 			}
 			for sm := range smc {
