@@ -189,11 +189,12 @@ type BuildChainParams struct {
 }
 
 type SimpleMessage struct {
-	From     string
-	URI      string
-	POs      []PayloadObject
-	ROs      []objects.RoutingObject
-	POErrors []error
+	From      string
+	URI       string
+	POs       []PayloadObject
+	ROs       []objects.RoutingObject
+	POErrors  []error
+	Signature []byte
 }
 type SimpleChain struct {
 	Hash        string
