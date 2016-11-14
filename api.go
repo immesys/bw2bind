@@ -644,6 +644,13 @@ func (cl *BW2Client) Query(p *QueryParams) (chan *SimpleMessage, error) {
 				continue
 			}
 			sm.URI, _ = f.GetFirstHeader("uri")
+			sigh, ok := f.GetFirstHeader("signature")
+			if ok {
+				rv, err := base64.URLEncoding.DecodeString(sigh)
+				if err == nil && len(rv) == 64 {
+					sm.Signature = rv
+				}
+			}
 			sm.ROs = f.GetAllROs()
 			poslice := make([]PayloadObject, f.NumPOs())
 			errslice := make([]error, 0)
