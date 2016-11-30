@@ -431,16 +431,23 @@ const POMaskGilesQueryError = 32
 
 //L7G1Raw (2.0.10.1/32): L7G v1 Raw message
 //A map containing - srcmac: the MAC address of the sensor - srcip: the IP
-//address of the sensor, if available - popid: the ID of the point of presence
-//that received the packet - poptime: the boot time (in us) of the pop when the
-//message was received - brtime: the real time (in ns) at the border router
-//when the message was relayed to bosswave - rssi: the RSSI of the message at
-//the pop, if available - lqi: the LQI of the message at the pop, if available
-//- payload: the raw message
+//address of the sensor, if available - type: the 16 bit L7G type field -
+//popid: the ID of the point of presence that received the packet - poptime:
+//the boot time (in us) of the pop when the message was received - brtime: the
+//real time (in ns) at the border router when the message was relayed to
+//bosswave - rssi: the RSSI of the message at the pop, if available - lqi: the
+//LQI of the message at the pop, if available - payload: the raw message
 const PONumL7G1Raw = 33556993
 const PODFMaskL7G1Raw = `2.0.10.1/32`
 const PODFL7G1Raw = `2.0.10.1`
 const POMaskL7G1Raw = 32
+
+//L7G1Stats (2.0.10.2/32): L7G v1 stats message
+//tbd
+const PONumL7G1Stats = 33556994
+const PODFMaskL7G1Stats = `2.0.10.2/32`
+const PODFL7G1Stats = `2.0.10.2`
+const POMaskL7G1Stats = 32
 
 //ChirpFeed (2.0.11.1/32): Chirp Anemometer Feed
 //A map containing - vendor: the vendor implementing the algorithm - sensor:
@@ -451,6 +458,28 @@ const PONumChirpFeed = 33557249
 const PODFMaskChirpFeed = `2.0.11.1/32`
 const PODFChirpFeed = `2.0.11.1`
 const POMaskChirpFeed = 32
+
+//HamiltonOT (2.0.11.2/32): Hamilton OT
+//A map containing - time: nanoseconds since the epoch - other stuff TODO
+const PONumHamiltonOT = 33557250
+const PODFMaskHamiltonOT = `2.0.11.2/32`
+const PODFHamiltonOT = `2.0.11.2`
+const POMaskHamiltonOT = 32
+
+//HamiltonOR (2.0.11.3/32): Hamilton Orientation
+//A map containing - time: nanoseconds since the epoch - other stuff TODO
+const PONumHamiltonOR = 33557251
+const PODFMaskHamiltonOR = `2.0.11.3/32`
+const PODFHamiltonOR = `2.0.11.3`
+const POMaskHamiltonOR = 32
+
+//VenstarInfo (2.0.12.1/32): VenstarInfo
+//Consult the venstar API documentation at
+//http://developer.venstar.com/restcalls.html
+const PONumVenstarInfo = 33557505
+const PODFMaskVenstarInfo = `2.0.12.1/32`
+const PODFVenstarInfo = `2.0.12.1`
+const POMaskVenstarInfo = 32
 
 //String (64.0.1.0/32): String
 //A plain string with no rigid semantic meaning. This can be thought of as a
