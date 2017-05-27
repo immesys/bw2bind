@@ -20,6 +20,10 @@ type BW2Client struct {
 	rHost        string
 }
 
+func (cl *BW2Client) Close() error {
+	return cl.c.Close()
+}
+
 //Sends a request frame and returns a  chan that contains all the responses.
 //Automatically closes the returned channel when there are no more responses.
 func (cl *BW2Client) transact(req *frame) chan *frame {
