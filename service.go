@@ -128,14 +128,18 @@ func (ifc *Interface) PublishSignal(signal string, poz ...PayloadObject) error {
 		Persist:        true,
 	})
 }
-func (ifc *Interface) SubscribeSlot(slot string, cb func(*SimpleMessage)) {
-	rc := ifc.svc.cl.SubscribeOrExit(&SubscribeParams{
+func (ifc *Interface) SubscribeSlot(slot string, cb func(*SimpleMessage)) error {
+	rc, err := ifc.svc.cl.Subscribe(&SubscribeParams{
 		URI:       ifc.SlotURI(slot),
 		AutoChain: true,
 	})
+	if err != nil {
+		return err
+	}
 	go func() {
 		for sm := range rc {
 			cb(sm)
 		}
 	}()
+	return nil
 }
