@@ -19,11 +19,12 @@ func handleErr(err error) {
 }
 
 type Service struct {
-	cl      *BW2Client
-	name    string
-	baseuri string
-	ifaces  []*Interface
-	mu      *sync.Mutex
+	cl           *BW2Client
+	name         string
+	baseuri      string
+	ifaces       []*Interface
+	mu           *sync.Mutex
+	errorHandler func(error)
 }
 
 type Interface struct {
@@ -45,15 +46,28 @@ func (s *Service) registerLoop() {
 	//Initial delay is lower
 	time.Sleep(1 * time.Second)
 	for {
-		err := s.cl.SetMetadata(s.baseuri+"/"+s.name, "lastalive", time.Now().String())
-		handleErr(err)
-		s.mu.Lock()
-		for _, i := range s.ifaces {
-			if i.auto {
-				i.updateRegistration()
+		if err := s.cl.SetMetadata(s.baseuri+"/"+s.name, "lastalive", time.Now().String()); err != nil {
+			if s.errorHandler != nil {
+				s.errorHandler(err)
+			} else {
+				handleErr(err)
 			}
+		} else {
+			s.mu.Lock()
+			for _, i := range s.ifaces {
+				if i.auto {
+					if err := i.updateRegistration(); err != nil {
+						if s.errorHandler != nil {
+							s.errorHandler(err)
+						} else {
+							handleErr(err)
+						}
+						break
+					}
+				}
+			}
+			s.mu.Unlock()
 		}
-		s.mu.Unlock()
 		time.Sleep(RegistrationInterval * time.Second)
 	}
 }
@@ -93,9 +107,15 @@ func (s *Service) RegisterInterfaceHeartbeatOnPub(prefix string, name string) *I
 	s.mu.Unlock()
 	return rv
 }
+
 func (s *Service) SetMetadata(key, val string) error {
 	return s.cl.SetMetadata(s.FullURI(), key, val)
 }
+
+func (s *Service) SetErrorHandler(f func(error)) {
+	s.errorHandler = f
+}
+
 func (ifc *Interface) FullURI() string {
 	return ifc.svc.FullURI() + "/" + ifc.prefix + "/" + ifc.name
 }
@@ -112,9 +132,8 @@ func (ifc *Interface) GetMetadataKey(key string) (string, error) {
 	dat, _, err := ifc.svc.cl.GetMetadataKey(ifc.FullURI(), key)
 	return dat.Value, err
 }
-func (ifc *Interface) updateRegistration() {
-	err := ifc.SetMetadata("lastalive", time.Now().String())
-	handleErr(err)
+func (ifc *Interface) updateRegistration() error {
+	return ifc.SetMetadata("lastalive", time.Now().String())
 }
 func (ifc *Interface) PublishSignal(signal string, poz ...PayloadObject) error {
 	if !ifc.auto && time.Now().Sub(ifc.last) > RegistrationInterval*time.Second {
