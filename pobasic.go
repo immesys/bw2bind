@@ -78,7 +78,7 @@ func (po *PayloadObjectImpl) GetPODotNum() string {
 	return fmt.Sprintf("%d.%d.%d.%d", po.ponum>>24, (po.ponum>>16)&0xFF, (po.ponum>>8)&0xFF, po.ponum&0xFF)
 }
 func (po *PayloadObjectImpl) TextRepresentation() string {
-	return fmt.Sprintf("PO %s len %d (generic) hexdump:", PONumDotForm(po.ponum), len(po.contents), hex.Dump(po.contents))
+	return fmt.Sprintf("PO %s len %d (generic) hexdump:\n%s", PONumDotForm(po.ponum), len(po.contents), hex.Dump(po.contents))
 }
 func (po *PayloadObjectImpl) IsType(ponum, mask int) bool {
 	return (ponum >> uint(32-mask)) == (po.ponum >> uint(32-mask))
