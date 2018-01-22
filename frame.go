@@ -211,26 +211,34 @@ func (f *frame) IsResponse() (bool, error) {
 	return false, nil
 }
 func (f *frame) WriteToStream(s *bufio.Writer) {
+	saveError := func(n int, err error) {
+		if err != nil {
+			fmt.Println("save", err)
+		}
+	}
+
 	s.WriteString(fmt.Sprintf("%4s %010d %010d\n", f.Cmd, f.Length, f.SeqNo))
 	for _, v := range f.Headers {
-		s.WriteString(fmt.Sprintf("kv %s %s\n", v.Key, v.Length))
-		s.Write(v.Content)
-		s.WriteRune('\n')
+		saveError(s.WriteString(fmt.Sprintf("kv %s %s\n", v.Key, v.Length)))
+		saveError(s.Write(v.Content))
+		saveError(s.WriteRune('\n'))
 	}
 	for _, re := range f.ROs {
-		s.WriteString(fmt.Sprintf("ro %s %s\n",
-			re.RONum, re.Length))
-		s.Write(re.RO.GetContent())
-		s.WriteRune('\n')
+		saveError(s.WriteString(fmt.Sprintf("ro %s %s\n",
+			re.RONum, re.Length)))
+		saveError(s.Write(re.RO.GetContent()))
+		saveError(s.WriteRune('\n'))
 	}
 	for _, pe := range f.POs {
-		s.WriteString(fmt.Sprintf("po %s:%s %s\n",
-			pe.StrPODotForm, pe.StrPONum, pe.StrLen))
-		s.Write(pe.PO)
-		s.WriteRune('\n')
+		saveError(s.WriteString(fmt.Sprintf("po %s:%s %s\n",
+			pe.StrPODotForm, pe.StrPONum, pe.StrLen)))
+		saveError(s.Write(pe.PO))
+		saveError(s.WriteRune('\n'))
 	}
-	s.WriteString("end\n")
-	s.Flush()
+	saveError(s.WriteString("end\n"))
+	if err := s.Flush(); err != nil {
+		fmt.Println("flush", err)
+	}
 }
 
 func loadFrameFromStream(s *bufio.Reader) (f *frame, e error) {

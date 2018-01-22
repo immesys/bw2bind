@@ -322,6 +322,9 @@ func (cl *BW2Client) Publish(p *PublishParams) error {
 	rsp := cl.transact(req)
 	fr, _ := <-rsp
 	err := fr.MustResponse()
+	if err != nil {
+		fmt.Println("ERROR", err)
+	}
 	return err
 }
 
