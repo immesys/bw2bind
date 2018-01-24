@@ -48,6 +48,33 @@ func (cl *BW2Client) OverrideAutoChainTo(v bool) {
 	cl.defAutoChain = &v
 }
 
+// This enables the WAL for persistent publishing. The WAL is created at the given
+// directory path. To use the WAL, set the EnsureDelivery flag in PublishParams to true.
+// Calling EnableWAL also starts asynchronously re-publishing pending messages to the
+// designated router
+func (cl *BW2Client) EnableWAL(dir string) error {
+	var err error
+	cl.wal, err = newWal(dir)
+	if err != nil {
+		log.Critical(err)
+	}
+
+	// replay the pending messages
+	go func() {
+		topublish, err := cl.wal.pending()
+		if err != nil {
+			log.Error("error replay", err)
+		}
+		for _, pp := range topublish {
+			pp.Persist = false
+			if err := cl.Publish(pp); err != nil {
+				log.Error("error replay", err)
+			}
+		}
+	}()
+	return nil
+}
+
 // ClearAutoChainOverride will remove the AutoChain override, allowing the
 // per-call AutoChain setting to take effect.
 func (cl *BW2Client) ClearAutoChainOverride() {
@@ -289,6 +316,22 @@ func (cl *BW2Client) Publish(p *PublishParams) error {
 	if p.Persist {
 		cmd = cmdPersist
 	}
+	var (
+		hash []byte
+		err  error
+	)
+
+	// add this message to the WAL
+	if p.EnsureDelivery && cl.wal == nil {
+		return errors.New("Need to call client.EnableWAL(<directory>) to ensure delivery")
+	}
+	if p.EnsureDelivery {
+		hash, err = cl.wal.add(*p)
+		if err != nil {
+			return err
+		}
+	}
+
 	req := createFrame(cmd, seqno)
 	if cl.defAutoChain != nil {
 		p.AutoChain = *cl.defAutoChain
@@ -321,10 +364,14 @@ func (cl *BW2Client) Publish(p *PublishParams) error {
 	req.AddHeader("persist", strconv.FormatBool(p.Persist))
 	rsp := cl.transact(req)
 	fr, _ := <-rsp
-	err := fr.MustResponse()
-	if err != nil {
-		fmt.Println("ERROR", err)
+
+	// mark this message as sent in the WAL
+	if p.EnsureDelivery {
+		if err := cl.wal.done(hash); err != nil {
+			return err
+		}
 	}
+	err = fr.MustResponse()
 	return err
 }
 
