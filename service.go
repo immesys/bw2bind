@@ -128,6 +128,19 @@ func (ifc *Interface) PublishSignal(signal string, poz ...PayloadObject) error {
 		Persist:        true,
 	})
 }
+func (ifc *Interface) PublishSignalReliable(signal string, poz ...PayloadObject) error {
+	if !ifc.auto && time.Now().Sub(ifc.last) > RegistrationInterval*time.Second {
+		ifc.updateRegistration()
+		ifc.last = time.Now()
+	}
+	return ifc.svc.cl.Publish(&PublishParams{
+		URI:            ifc.SignalURI(signal),
+		AutoChain:      true,
+		PayloadObjects: poz,
+		Persist:        true,
+		EnsureDelivery: true,
+	})
+}
 func (ifc *Interface) SubscribeSlot(slot string, cb func(*SimpleMessage)) {
 	rc := ifc.svc.cl.SubscribeOrExit(&SubscribeParams{
 		URI:       ifc.SlotURI(slot),
