@@ -162,3 +162,18 @@ func (ifc *Interface) SubscribeSlot(slot string, cb func(*SimpleMessage)) error 
 	}()
 	return nil
 }
+func (ifc *Interface) SubscribeSlotH(slot string, cb func(*SimpleMessage)) (string, error) {
+	rc, handle, err := ifc.svc.cl.SubscribeH(&SubscribeParams{
+		URI:       ifc.SlotURI(slot),
+		AutoChain: true,
+	})
+	if err != nil {
+		return "", err
+	}
+	go func() {
+		for sm := range rc {
+			cb(sm)
+		}
+	}()
+	return handle, nil
+}
