@@ -42,6 +42,12 @@ func (cl *BW2Client) RegisterService(baseuri string, name string) *Service {
 	return rv
 }
 
+func (cl *BW2Client) RegisterServiceNoHb(baseuri string, name string) *Service {
+	baseuri = strings.TrimSuffix(baseuri, "/")
+	rv := &Service{cl: cl, baseuri: baseuri, name: name, mu: &sync.Mutex{}}
+	return rv
+}
+
 func (s *Service) registerLoop() {
 	//Initial delay is lower
 	time.Sleep(1 * time.Second)
