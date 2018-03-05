@@ -18,6 +18,7 @@ type BW2Client struct {
 	curseqno     uint32
 	defAutoChain *bool
 	rHost        string
+	wal          *wal
 }
 
 func (cl *BW2Client) Close() error {

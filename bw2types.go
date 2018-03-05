@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/immesys/bw2/objects"
+	"gopkg.in/vmihailenco/msgpack.v3"
 )
 
 // ElaborateDefault is the same as ElaboratePartial
@@ -56,7 +57,74 @@ type PublishParams struct {
 	DoNotVerify bool
 	// Do you want the message to be persist on the designated router
 	Persist bool
+	// Do you want the message delivery to the designated router to be guaranteed
+	// This gets persisted in a local WAL. Setting this to true automatically sets
+	// the Persist flag to false.
+	EnsureDelivery bool
 }
+
+func (pp PublishParams) EncodeMsgpack(enc *msgpack.Encoder) error {
+	err := enc.Encode(pp.URI)
+	if err != nil {
+		return err
+	}
+	err = enc.Encode(len(pp.PayloadObjects))
+	if err != nil {
+		return err
+	}
+	for _, po := range pp.PayloadObjects {
+		err = enc.Encode(po.GetPONum())
+		if err != nil {
+			return err
+		}
+		err = enc.Encode(po.GetContents())
+		if err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+func (pp *PublishParams) DecodeMsgpack(dec *msgpack.Decoder) error {
+	err := dec.Decode(&pp.URI)
+	if err != nil {
+		return err
+	}
+	var num int
+	var ponum int
+	var contents []byte
+	err = dec.Decode(&num)
+	if err != nil {
+		return err
+	}
+	for i := 0; i < num; i++ {
+		if err := dec.Decode(&ponum, &contents); err != nil {
+			return err
+		}
+		po, err := LoadPayloadObject(ponum, contents)
+		if err != nil {
+			return err
+		}
+		pp.PayloadObjects = append(pp.PayloadObjects, po)
+	}
+
+	return nil
+}
+
+func (po *PayloadObjectImpl) EncodeMsgpack(enc *msgpack.Encoder) error {
+	return enc.Encode(po.GetPONum(), po.GetContents())
+}
+func (po *PayloadObjectImpl) DecodeMsgpack(dec *msgpack.Decoder) error {
+	var ponum int
+	var contents []byte
+	if err := dec.Decode(&ponum, &contents); err != nil {
+		return err
+	}
+	var err error
+	po, err = LoadBasePayloadObject(ponum, contents)
+	return err
+}
+
 type SubscribeParams struct {
 	// The URI you wish to subscribe to
 	URI string
