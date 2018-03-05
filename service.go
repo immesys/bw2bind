@@ -42,6 +42,12 @@ func (cl *BW2Client) RegisterService(baseuri string, name string) *Service {
 	return rv
 }
 
+func (cl *BW2Client) RegisterServiceNoHb(baseuri string, name string) *Service {
+	baseuri = strings.TrimSuffix(baseuri, "/")
+	rv := &Service{cl: cl, baseuri: baseuri, name: name, mu: &sync.Mutex{}}
+	return rv
+}
+
 func (s *Service) registerLoop() {
 	//Initial delay is lower
 	time.Sleep(1 * time.Second)
@@ -161,4 +167,19 @@ func (ifc *Interface) SubscribeSlot(slot string, cb func(*SimpleMessage)) error 
 		}
 	}()
 	return nil
+}
+func (ifc *Interface) SubscribeSlotH(slot string, cb func(*SimpleMessage)) (string, error) {
+	rc, handle, err := ifc.svc.cl.SubscribeH(&SubscribeParams{
+		URI:       ifc.SlotURI(slot),
+		AutoChain: true,
+	})
+	if err != nil {
+		return "", err
+	}
+	go func() {
+		for sm := range rc {
+			cb(sm)
+		}
+	}()
+	return handle, nil
 }

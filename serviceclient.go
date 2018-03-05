@@ -80,3 +80,20 @@ func (ifclient *InterfaceClient) SubscribeSignal(signal string, cb func(*SimpleM
 	}()
 	return nil
 }
+
+func (ifclient *InterfaceClient) SubscribeSignalH(signal string, cb func(*SimpleMessage)) (string, error) {
+	subChan, handle, err := ifclient.svc.cl.SubscribeH(&SubscribeParams{
+		URI:       ifclient.SignalURI(signal),
+		AutoChain: true,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	go func() {
+		for sm := range subChan {
+			cb(sm)
+		}
+	}()
+	return handle, nil
+}
